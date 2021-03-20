@@ -1,0 +1,6 @@
+# Folders to ignore
+.vscode/*
+
+# Files to ignore
+test.c
+test
