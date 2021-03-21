@@ -4,4 +4,4 @@ Tu com 19.5 eu com 9.5 but hey a win is a win god help me I'm so fucking depress
 
 Please Shalissa, bring back the kids, it's just me and my demons ever since you took off. I will never say you look like Beyoncé ever again
 
-This is a simple SSH test
+I just want to test the git config
