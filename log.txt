@@ -1,2 +1,6 @@
-16:47:34  I hate AED
-16:47:34  Juro quero dar nas bentas do Bento
+23:20:36  Hello
+23:20:36  Created shared memory segment
+23:20:36  Attached to shared memory segment
+23:20:36  Configuration read
+23:20:36  Shared memory segment removed
+23:20:36  Goodbye
