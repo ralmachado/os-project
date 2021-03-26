@@ -2,5 +2,4 @@
 .vscode/*
 
 # Files to ignore
-test.c
-test
+main
