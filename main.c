@@ -6,6 +6,9 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/wait.h>
+
+#include "team.h"
 
 #define DEBUG 0
 #define BUFFSIZE 128
@@ -18,6 +21,8 @@ sharedmem* configs = NULL;
 int shm_key;
 
 FILE* log_file;
+
+int childs = 0;
 
 void init_shm();
 void read_conf(char* filename);
@@ -42,6 +47,15 @@ int main(void) {
     init_shm(configs);
 
     read_conf("config.txt");
+
+    if (fork() == 0) {
+        team_init();
+    } else childs++;
+
+    for (int i = 0; i < childs; i++) {
+        wait(NULL);
+        childs--;
+    }
 
     terminate(0);
     return 0;
