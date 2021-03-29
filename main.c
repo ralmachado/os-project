@@ -9,16 +9,11 @@
 #include <sys/wait.h>
 
 #include "team.h"
+#include "breakdown.h"
+#include "sharedmem.h"
 
 #define DEBUG 0
 #define BUFFSIZE 128
-
-typedef struct mem_struct {
-    int timeUnit, lapDistance, lapCount, noTeams, tBreakdown, tBoxMin, tBoxMax, capacity;
-} sharedmem;
-
-sharedmem* configs = NULL;
-int shm_key;
 
 FILE* log_file;
 
@@ -26,6 +21,7 @@ int childs = 0;
 
 void init_shm();
 void read_conf(char* filename);
+void init_proc(void (*function)());
 void log_message(char* message);
 void terminate(int code);
 
@@ -48,17 +44,24 @@ int main(void) {
 
     read_conf("config.txt");
 
-    if (fork() == 0) {
-        team_init();
-    } else childs++;
+    init_proc(team_init);
+    init_proc(breakdown_init);
 
-    for (int i = 0; i < childs; i++) {
-        wait(NULL);
-        childs--;
-    }
+    char buff[128];
+    snprintf(buff, sizeof(buff), "Main has %d childs\n", childs);
+    log_message(buff);
 
+    for (int i = 0; i < childs; i++) wait(NULL);
+    
     terminate(0);
     return 0;
+}
+
+void init_proc(void (*function)()) {
+    if (function == NULL) return;
+    if (fork() == 0) {
+        function();
+    } else childs++;
 }
 
 void init_shm() {

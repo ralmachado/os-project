@@ -1,6 +1,25 @@
-23:20:36  Hello
-23:20:36  Created shared memory segment
-23:20:36  Attached to shared memory segment
-23:20:36  Configuration read
-23:20:36  Shared memory segment removed
-23:20:36  Goodbye
+16:44:18  Hello
+16:44:18  Created shared memory segment
+16:44:18  Attached to shared memory segment
+16:44:18  Configuration read
+16:44:18  Team Manager process spawned
+16:44:18  Car thread created
+16:44:18  Car thread created
+16:44:20  Car thread exiting
+16:44:20  Car thread exiting
+16:44:20  Team Manager joined threads
+16:44:20  Team Manager joined threads
+16:44:20  Team Manager exiting
+16:44:18  Hello
+16:44:18  Created shared memory segment
+16:44:18  Attached to shared memory segment
+16:44:18  Configuration read
+16:44:18  Breakdown Manager process spawned
+16:44:23  Breakdown Manager exiting
+16:44:18  Hello
+16:44:18  Created shared memory segment
+16:44:18  Attached to shared memory segment
+16:44:18  Configuration read
+16:44:18  Main has 2 childs
+16:44:23  Shared memory segment removed
+16:44:23  Goodbye
