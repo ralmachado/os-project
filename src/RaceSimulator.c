@@ -85,84 +85,64 @@ void read_conf(char* filename) {
         terminate(1);
     }
 
-    char buff[BUFFSIZE], *token;
+    int in1, in2;
     
-    if (fgets(buff, sizeof(buff), config)) {
-        if ((configs->timeUnit = atoi(buff)) == 0) {
-            fprintf(stderr, "timeUnit null\n");
-            exit(1);
-        }
-    } else {
-        fprintf(stderr, "Missing configuration arguments\n");
+    fscanf(config, "%d\n", &in1);
+    if (in1 <= 0) {
+        fprintf(stderr, "timeUnit null\n");
         fclose(config);
         terminate(1);
-    }
+    } else configs->timeUnit = in1;
 
-    if (fgets(buff, sizeof(buff), config)) {
-        token = strtok(buff, ",");
-        if (token == NULL || (configs->lapDistance = atoi(token)) == 0) {
-            fprintf(stderr, "lapDistance null\n");
-            fclose(config);
-            terminate(1);
-        }
-        token = strtok(NULL, ",");
-        if (token == NULL || (configs->lapCount = atoi(token)) == 0) {
-            fprintf(stderr, "lapCount null\n");
-            fclose(config);
-            terminate(1);
-        }
-    }
-
-    if (fgets(buff, sizeof(buff), config)) {
-        if (!(configs->noTeams = atoi(buff))) {
-            fprintf(stderr, "noTeams null\n");
-            fclose(config);
-            terminate(1);
-        }
-    } else {
-        fprintf(stderr, "Missing configuration arguments\n");
+    fscanf(config, "%d, %d\n", &in1, &in2);
+    if (in1 <= 0) {
+        log_message("lapDistance is not a positive integer\n");
         fclose(config);
         terminate(1);
-    }
-
-    if (fgets(buff, sizeof(buff), config)) {
-        if (!(configs->tBreakdown = atoi(buff))) {
-            fprintf(stderr, "tBreakdown null\n");
-            fclose(config);
-            terminate(1);
-        }
-    } else {
-        fprintf(stderr, "Missing configuration arguments\n");
+    } else if (in2 <= 0) {
+        log_message("lapCount is not a positive integer\n");
         fclose(config);
         terminate(1);
+    } else {
+        configs->lapDistance = in1;
+        configs->lapCount = in2;
+    }
+
+    fscanf(config, "%d\n", &in1);
+    if (in1 < 3) {
+        log_message("Not enough teams to setup a race, minimum is 3\n");
+        fclose(config);
+        terminate(1);
+    } else configs->noTeams = in1;
+
+    fscanf(config, "%d\n", &in1);
+    if (in1 <= 0) {
+        log_message("tBreakdown is not a positive integer\n");
+        fclose(config);
+        terminate(1);
+    } else configs->tBreakdown = in1;
+
+    fscanf(config, "%d, %d\n", &in1, &in2);
+    if (in1 <= 0) {
+        log_message("tBoxMin is not a positive integer\n");
+        fclose(config);
+        terminate(1);
+    } else if (in2 < in1) { 
+        log_message("tBoxMax is not greater than tBoxMin\n");
+        fclose(config);
+        terminate(1);
+    } else  {
+        configs->tBoxMin = in1;
+        configs->tBoxMax = in2;
     }
     
-    if (fgets(buff, sizeof(buff), config)) {
-        token = strtok(buff, ",");
-        if (token == NULL || !(configs->tBoxMin = atoi(token))) {
-            fprintf(stderr, "tBoxMin null\n");
-            fclose(config);
-            terminate(1);
-        }
-        token = strtok(NULL, "\n");
-        if (token == NULL || !(configs->tBoxMax = atoi(token))) {
-            fprintf(stderr, "tBoxMax null\n");
-            fclose(config);
-            terminate(1);
-        }
-    }
-
-    if (fgets(buff, sizeof(buff), config)) {
-        if (!(configs->capacity = atoi(buff))) {
-            fprintf(stderr, "capacity null\n");
-            fclose(config);
-            terminate(1);
-        }
-    } else {
-        fprintf(stderr, "Missing configuration arguments\n");
+    fscanf(config, "%d\n", &in1);
+    if (in1 <= 0) {
+        log_message("capacity is not a positive integer\n");
         fclose(config);
         terminate(1);
     }
+
 
     #if DEBUG
         printf(">> timeUnit = %d\n", configs->timeUnit);
