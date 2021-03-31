@@ -1,25 +1,32 @@
-10:40:52  Hello
-10:40:52  Created shared memory segment
-10:40:52  Attached to shared memory segment
-10:40:52  Configuration read
-10:40:52  Team Manager process spawned
-10:40:52  Car thread created
-10:40:52  Car thread created
-10:40:54  Car thread exiting
-10:40:54  Car thread exiting
-10:40:54  Team Manager joined threads
-10:40:54  Team Manager joined threads
-10:40:54  Team Manager exiting
-10:40:52  Hello
-10:40:52  Created shared memory segment
-10:40:52  Attached to shared memory segment
-10:40:52  Configuration read
-10:40:52  Breakdown Manager process spawned
-10:40:57  Breakdown Manager exiting
-10:40:52  Hello
-10:40:52  Created shared memory segment
-10:40:52  Attached to shared memory segment
-10:40:52  Configuration read
-10:40:52  Main has 2 childs
-10:40:57  Shared memory segment removed
-10:40:57  Goodbye
+15:29:07  Hello
+15:29:07  Created shared memory segment
+15:29:07  Attached to shared memory segment
+15:29:07  Configuration read
+15:29:07  Team Manager #2 process spawned
+15:29:07  Breakdown Manager process spawned
+15:29:07  Team Manager #1 process spawned
+15:29:07  Team #2: Car thread #2 created
+15:29:07  Team #2: Car thread #1 created
+15:29:07  Team #1: Car thread #1 created
+15:29:07  Team #1: Car thread #2 created
+15:29:07  Team Manager #3 process spawned
+15:29:07  Team #3: Car thread #1 created
+15:29:07  Team #3: Car thread #2 created
+15:29:09  Team #2: Car thread #1 exiting
+15:29:09  Team #1: Car thread #1 exiting
+15:29:09  Team #2: Car thread #2 exiting
+15:29:09  Team #1: Car thread #2 exiting
+15:29:09  Team #3: Car thread #1 exiting
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager exiting
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager exiting
+15:29:09  Team #3: Car thread #2 exiting
+15:29:09  Team Manager joined threads
+15:29:09  Team Manager exiting
+15:29:12  Breakdown Manager exiting
+15:29:12  Shared memory segment removed
+15:29:12  Goodbye
