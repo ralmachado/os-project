@@ -1,0 +1,1 @@
+extern void race_manager();
