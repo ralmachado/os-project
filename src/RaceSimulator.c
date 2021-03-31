@@ -8,6 +8,7 @@
 #include <sys/shm.h>
 #include <sys/wait.h>
 
+#include "libs/RaceManager.h"
 #include "libs/TeamManager.h"
 #include "libs/BreakdownManager.h"
 #include "libs/SharedMem.h"
@@ -17,14 +18,11 @@
 
 FILE* log_file;
 
-int childs = 0;
-
 void init_shm();
 void read_conf(char* filename);
-void spawn_teams();
 void init_proc(void (*function)(), void* arg);
 void log_message(char* message);
-void wait_childs();
+void wait_childs(int n);
 void terminate(int code);
 
 int main(void) {
@@ -39,17 +37,17 @@ int main(void) {
 
     read_conf("config.txt");
 
-    spawn_teams();
-    init_proc(breakdown_init, NULL);
+    init_proc(race_manager, NULL);
+    init_proc(breakdown_manager, NULL);
 
-    wait_childs();
+    wait_childs(2);
     
     terminate(0);
     return 0;
 }
 
-void wait_childs() {
-    for (int i = 0; i < childs; i++) wait(NULL);
+void wait_childs(int n) {
+    for (int i = 0; i < n; i++) wait(NULL);
 }
 
 void init_proc(void (*function)(), void* arg) {
@@ -57,18 +55,6 @@ void init_proc(void (*function)(), void* arg) {
     if (fork() == 0) {
         if (arg) function(arg);
         else function();
-    } else childs++;
-}
-
-void spawn_teams() {
-    int* id;
-    if (!(id = malloc(sizeof(int)))) {
-        log_message("Call to malloc failed\n");
-        terminate(1);
-    }
-    for (int i = 0; i < configs->noTeams; i++) {
-        *id = i+1;   
-        init_proc(team_init, id);
     }
 }
 

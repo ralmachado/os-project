@@ -1,1 +1,1 @@
-extern void breakdown_init();
+extern void breakdown_manager();
