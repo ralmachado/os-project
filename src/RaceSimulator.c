@@ -59,13 +59,13 @@ void init_proc(void (*function)(), void* arg) {
 }
 
 void init_shm() {
-    shm_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
-    if (shm_key == -1) {
+    configs_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
+    if (configs_key == -1) {
         perror("Failed to get shared memory key");
         exit(1);
     } else log_message("Created shared memory segment\n");
 
-    configs = (sharedmem *) shmat(shm_key, NULL, 0);
+    configs = (sharedmem *) shmat(configs_key, NULL, 0);
     if (configs == NULL) {
         perror("Failed to attach to shared memory segment");
         exit(1);
@@ -111,6 +111,13 @@ void read_conf(char* filename) {
 
     fscanf(config, "%d\n", &in1);
     if (in1 <= 0) {
+        log_message("maxCars is not a positive integer\n");
+        fclose(config);
+        terminate(1);
+    } else configs->maxCars = in1;
+
+    fscanf(config, "%d\n", &in1);
+    if (in1 <= 0) {
         log_message("tBreakdown is not a positive integer\n");
         fclose(config);
         terminate(1);
@@ -135,7 +142,7 @@ void read_conf(char* filename) {
         log_message("capacity is not a positive integer\n");
         fclose(config);
         terminate(1);
-    }
+    } else configs->capacity = in1;
 
 
     #if DEBUG
@@ -143,6 +150,7 @@ void read_conf(char* filename) {
         printf(">> lapDistance = %d\n", configs->lapDistance);
         printf(">> lapCount = %d\n", configs->lapCount);
         printf(">> noTeams = %d\n", configs->noTeams);
+        printf(">> maxCars = %d\n", configs->maxCars);
         printf(">> tBreakdown = %d\n", configs->tBreakdown);
         printf(">> tBoxMin = %d\n", configs->tBoxMin);
         printf(">> tBoxMax = %d\n", configs->tBoxMax);
@@ -168,7 +176,7 @@ void log_message(char* message) {
 
 void terminate(int code) {
     if (configs) {
-        shmctl(shm_key, IPC_RMID, NULL);
+        shmctl(configs_key, IPC_RMID, NULL);
         log_message("Shared memory segment removed\n");
         configs = NULL;
     }
