@@ -8,6 +8,7 @@
 #include <sys/shm.h>
 #include <sys/wait.h>
 
+#include "libs/RaceManager.h"
 #include "libs/TeamManager.h"
 #include "libs/BreakdownManager.h"
 #include "libs/SharedMem.h"
@@ -17,20 +18,12 @@
 
 FILE* log_file;
 
-int childs = 0;
-
 void init_shm();
 void read_conf(char* filename);
-void init_proc(void (*function)());
+void init_proc(void (*function)(), void* arg);
 void log_message(char* message);
+void wait_childs(int n);
 void terminate(int code);
-
-/* 
-    ---- TODO ----
-
-    1. Criar processo "Gestor de Corrida", "Gestor de Equipa" e "Gestor de Avarias"
-    2. O "Gestor de Equipa" deve criar as threads "Carro"
-*/
 
 int main(void) {
     if ((log_file = fopen("log.txt", "w+")) == NULL) {
@@ -44,24 +37,25 @@ int main(void) {
 
     read_conf("config.txt");
 
-    init_proc(team_init);
-    init_proc(breakdown_init);
+    init_proc(race_manager, NULL);
+    init_proc(breakdown_manager, NULL);
 
-    char buff[128];
-    snprintf(buff, sizeof(buff), "Main has %d childs\n", childs);
-    log_message(buff);
-
-    for (int i = 0; i < childs; i++) wait(NULL);
+    wait_childs(2);
     
     terminate(0);
     return 0;
 }
 
-void init_proc(void (*function)()) {
+void wait_childs(int n) {
+    for (int i = 0; i < n; i++) wait(NULL);
+}
+
+void init_proc(void (*function)(), void* arg) {
     if (function == NULL) return;
     if (fork() == 0) {
-        function();
-    } else childs++;
+        if (arg) function(arg);
+        else function();
+    }
 }
 
 void init_shm() {
@@ -168,6 +162,7 @@ void log_message(char* message) {
 
     // Print and write to log file
     fprintf(log_file, "%s %s", time_s, message);
+    fflush(log_file);
     printf("%s %s", time_s, message);
 }
 
