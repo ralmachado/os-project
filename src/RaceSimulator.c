@@ -8,9 +8,9 @@
 #include <sys/shm.h>
 #include <sys/wait.h>
 
-#include "team.h"
-#include "breakdown.h"
-#include "sharedmem.h"
+#include "libs/team.h"
+#include "libs/breakdown.h"
+#include "libs/sharedmem.h"
 
 #define DEBUG 0
 #define BUFFSIZE 128
