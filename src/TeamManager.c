@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "libs/sharedmem.h"
+#include "libs/SharedMem.h"
 
 pthread_t cars[10];
 int racers = 0;

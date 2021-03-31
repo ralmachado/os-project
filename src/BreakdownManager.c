@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "libs/sharedmem.h"
+#include "libs/SharedMem.h"
 
 extern void log_message();
 
