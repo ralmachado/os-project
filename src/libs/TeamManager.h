@@ -1,1 +1,1 @@
-extern void team_init();
+extern void team_init(void* id);
