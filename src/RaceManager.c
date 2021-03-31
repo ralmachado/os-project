@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include "libs/SharedMem.h"
 #include "libs/TeamManager.h"
 
@@ -20,8 +22,15 @@ void spawn_teams() {
     }
 }
 
+void init_boxes() {
+    boxes_key = shmget(IPC_PRIVATE, sizeof(int)*configs->noTeams, IPC_EXCL|IPC_CREAT|0766);
+    boxes = shmat(boxes_key, NULL, 0);
+    for (int i = 0; i < configs->noTeams; i++) boxes[i] = 0;
+}
+
 void race_manager() {
     log_message("Race Manager: Process spawned\n");
+    init_boxes();
     spawn_teams();
     wait_childs(configs->noTeams);
     log_message("Race Manager: Process exiting\n");

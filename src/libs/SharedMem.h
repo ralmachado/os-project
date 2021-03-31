@@ -1,6 +1,8 @@
 typedef struct mem_struct {
-    int timeUnit, lapDistance, lapCount, noTeams, tBreakdown, tBoxMin, tBoxMax, capacity;
+    int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
+    int* boxes;
 } sharedmem;
 
 sharedmem* configs;
-int shm_key;
+int* boxes;
+int configs_key, boxes_key;

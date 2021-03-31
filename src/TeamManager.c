@@ -5,9 +5,9 @@
 
 #include "libs/SharedMem.h"
 
-pthread_t cars[10];
+pthread_t* cars;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-int racers = 0, teamId;
+int racers = 0, teamId, * box;
 
 extern void log_message();
 
@@ -26,7 +26,7 @@ void* vroom(void* r_id) {
 }
 
 void spawn_car() {
-    if (racers < 10) {
+    if (racers < configs->maxCars) {
         int* id;
         if (!(id = malloc(sizeof(int)))) {
             perror("malloc fail\n");
@@ -49,13 +49,15 @@ void join_threads() {
 }
 
 void team_execute() {
+    char buff[64];
+    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Box state = %d\n", teamId, *box);
+    log_message(buff);
     for (int i = 0; i < 2; i++)
         spawn_car();
 
     join_threads();
 
-    char buff[64];
-    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Exiting\n", teamId);
+    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Process exiting\n", teamId);
     log_message(buff);
     exit(0);
 }
@@ -65,6 +67,10 @@ void team_init(void* id) {
     free(id);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Process spawned\n", teamId);
+
+    cars = malloc(sizeof(pthread_t) * configs->maxCars);
+    box = boxes + (teamId - 1);
+
     log_message(buff);
     team_execute();
 }
