@@ -23,6 +23,7 @@ sem_t* mutex;
 
 void init_log();
 void init_shm();
+void init_sem();
 void read_conf(char* filename);
 void init_proc(void (*function)(), void* arg);
 void log_message(char* message);
@@ -30,9 +31,7 @@ void wait_childs(int n);
 void terminate(int code);
 
 int main(void) {
-    sem_unlink("MUTEX");
-    mutex = sem_open("MUTEX", O_CREAT|O_EXCL, 0766, 1);
-
+    init_sem();
     init_log();
     log_message("Hello\n");
 
@@ -79,7 +78,15 @@ void terminate(int code) {
         log_file = NULL;
     }
 
+    sem_close(mutex);
+    sem_unlink("MUTEX");
+
     exit(code);
+}
+
+void init_sem() {
+    sem_unlink("MUTEX");
+    mutex = sem_open("MUTEX", O_CREAT|O_EXCL, 0766, 1);
 }
 
 /* ----- Shared Memory Initialization (Configs) ----- */
