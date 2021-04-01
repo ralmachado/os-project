@@ -2,12 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #include "libs/SharedMem.h"
 
 pthread_t* cars;
 pthread_mutex_t t_mutex = PTHREAD_MUTEX_INITIALIZER;
 int racers = 0, teamId, * box;
+sem_t* mutex;
 
 extern void log_message();
 
@@ -17,13 +19,18 @@ void* vroom(void* r_id) {
     free(r_id);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Car thread #%d created\n", teamId, id);
+    sem_wait(mutex);
     log_message(buff);
+    printf(">> I am car #%d from team #%d\n", id, teamId);
+    sem_post(mutex);
     sleep(2);
     snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Car thread #%d exiting\n", teamId, id);
     
-    pthread_mutex_lock(&t_mutex);
+    // pthread_mutex_lock(&t_mutex);
+    sem_wait(mutex);
     log_message(buff);
-    pthread_mutex_unlock(&t_mutex);
+    sem_post(mutex);
+    // pthread_mutex_unlock(&t_mutex);
 
     pthread_exit(0);
 }
@@ -74,7 +81,7 @@ void team_init(void* id) {
     free(id);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Process spawned\n", teamId);
-
+    mutex = sem_open("MUTEX", 0);
     cars = malloc(sizeof(pthread_t) * configs->maxCars);
     box = boxes + (teamId - 1);
 
