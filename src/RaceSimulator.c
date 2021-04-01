@@ -19,6 +19,7 @@
 #define BUFFSIZE 128
 
 FILE* log_file;
+sem_t* mutex;
 
 void init_log();
 void init_shm();
