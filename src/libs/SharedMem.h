@@ -1,3 +1,5 @@
+#include <semaphore.h>
+
 typedef struct mem_struct {
     int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
     int* boxes;
@@ -6,3 +8,4 @@ typedef struct mem_struct {
 sharedmem* configs;
 int* boxes;
 int configs_key, boxes_key;
+sem_t *mutex;
