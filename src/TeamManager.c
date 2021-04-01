@@ -5,12 +5,13 @@
 
 #include "libs/SharedMem.h"
 
-pthread_t cars[10];
+pthread_t* cars;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-int racers = 0, teamId;
+int racers = 0, teamId, * box;
 
 extern void log_message();
 
+// Car threads live here
 void* vroom(void* r_id) {
     int id = *(int*)r_id;
     free(r_id);
@@ -25,11 +26,12 @@ void* vroom(void* r_id) {
     pthread_exit(0);
 }
 
+// Create a car thread if conditions match
 void spawn_car() {
-    if (racers < 10) {
+    if (racers < configs->maxCars) {
         int* id;
         if (!(id = malloc(sizeof(int)))) {
-            perror("malloc fail\n");
+            perror("malloc fail");
             return;
         }
         *id = racers + 1;
@@ -38,6 +40,7 @@ void spawn_car() {
     }
 }
 
+// Await for all car threads to exit
 void join_threads() {
     char buff[64];
     for (int i = 0; i < racers; i++) {
@@ -48,23 +51,31 @@ void join_threads() {
 
 }
 
+// Team Manager process lives here
 void team_execute() {
+    char buff[64];
+    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Box state = %d\n", teamId, *box);
+    log_message(buff);
     for (int i = 0; i < 2; i++)
         spawn_car();
 
     join_threads();
 
-    char buff[64];
-    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Exiting\n", teamId);
+    snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Process exiting\n", teamId);
     log_message(buff);
     exit(0);
 }
 
+// Setup Team Manager
 void team_init(void* id) {
     teamId = *(int*)id;
     free(id);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "Team Manager #%d: Process spawned\n", teamId);
+
+    cars = malloc(sizeof(pthread_t) * configs->maxCars);
+    box = boxes + (teamId - 1);
+
     log_message(buff);
     team_execute();
 }
