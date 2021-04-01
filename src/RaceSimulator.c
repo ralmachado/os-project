@@ -18,6 +18,7 @@
 
 FILE* log_file;
 
+void init_log();
 void init_shm();
 void read_conf(char* filename);
 void init_proc(void (*function)(), void* arg);
@@ -26,11 +27,7 @@ void wait_childs(int n);
 void terminate(int code);
 
 int main(void) {
-    if ((log_file = fopen("log.txt", "w+")) == NULL) {
-        perror("Failed to open log file");
-        exit(1);
-    }
-
+    init_log();
     log_message("Hello\n");
 
     init_shm(configs);
@@ -46,10 +43,9 @@ int main(void) {
     return 0;
 }
 
-void wait_childs(int n) {
-    for (int i = 0; i < n; i++) wait(NULL);
-}
+/* ----- Process Managing ----- */
 
+// Create a process, and execute function on the new process
 void init_proc(void (*function)(), void* arg) {
     if (function == NULL) return;
     if (fork() == 0) {
@@ -58,24 +54,48 @@ void init_proc(void (*function)(), void* arg) {
     }
 }
 
+// Await for n child termination 
+void wait_childs(int n) {
+    for (int i = 0; i < n; i++) wait(NULL);
+}
+
+// Cleanup shared memory segments and close opened streams before exiting
+void terminate(int code) {
+    if (configs) {
+        shmctl(configs_key, IPC_RMID, NULL);
+        log_message("Configs shared memory destroyed\n");
+        configs = NULL;
+    }
+
+    if (log_file) {
+        log_message("Goodbye\n");
+        fclose(log_file);
+        log_file = NULL;
+    }
+    exit(code);
+}
+
+/* ----- Shared Memory Initialization (Configs) ----- */
+
 void init_shm() {
     configs_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
     if (configs_key == -1) {
-        perror("Failed to get shared memory key");
+        log_message("Failed to get configs shared memory key\n");
         exit(1);
-    } else log_message("Created shared memory segment\n");
+    } else log_message("Configs shared memory created\n");
 
     configs = (sharedmem *) shmat(configs_key, NULL, 0);
     if (configs == NULL) {
-        perror("Failed to attach to shared memory segment");
+        log_message("Failed to attach to configs shared memory\n");
         exit(1);
-    } else log_message("Attached to shared memory segment\n");
+    } else log_message("Configs shared memory attached\n");
 }
 
+// Parse config file
 void read_conf(char* filename) {
     FILE* config;
     if ((config = fopen(filename, "r")) == NULL) {
-        perror("Failed to open config file");
+        log_message("Failed to open config file\n");
         terminate(1);
     }
 
@@ -161,6 +181,15 @@ void read_conf(char* filename) {
     log_message("Configuration read\n");
 }
 
+/* ----- Logging Functions -----*/
+
+void init_log() {
+    if ((log_file = fopen("log.txt", "w+")) == NULL) {      
+        log_message("Failed to open log file\n");
+        exit(1);
+    }
+}
+
 void log_message(char* message) {
     // Get current time
     char time_s[10];
@@ -172,19 +201,4 @@ void log_message(char* message) {
     fprintf(log_file, "%s %s", time_s, message);
     fflush(log_file);
     printf("%s %s", time_s, message);
-}
-
-void terminate(int code) {
-    if (configs) {
-        shmctl(configs_key, IPC_RMID, NULL);
-        log_message("Shared memory segment removed\n");
-        configs = NULL;
-    }
-
-    if (log_file) {
-        log_message("Goodbye\n");
-        fclose(log_file);
-        log_file = NULL;
-    }
-    exit(code);
 }
