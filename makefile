@@ -1,5 +1,5 @@
 CC = gcc
-FLAGS = -Wall -Wextra -pthread
+FLAGS = -Wall -Wextra -lpthread
 OBJS = src/RaceSimulator.o src/RaceManager.o src/TeamManager.o src/BreakdownManager.o src/SharedMem.o
 SRC = src/RaceSimulator.c src/RaceManager.c src/TeamManager.c src/BreakdownManager.c src/SharedMem.c 
 OUT = RaceSimulator

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <semaphore.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -27,6 +29,9 @@ void wait_childs(int n);
 void terminate(int code);
 
 int main(void) {
+    sem_unlink("MUTEX");
+    mutex = sem_open("MUTEX", O_CREAT|O_EXCL, 0766, 1);
+
     init_log();
     log_message("Hello\n");
 
@@ -72,6 +77,7 @@ void terminate(int code) {
         fclose(log_file);
         log_file = NULL;
     }
+
     exit(code);
 }
 
