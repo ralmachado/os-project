@@ -29,7 +29,7 @@ void spawn_car() {
     if (racers < configs->maxCars) {
         int* id;
         if (!(id = malloc(sizeof(int)))) {
-            perror("malloc fail\n");
+            perror("malloc fail");
             return;
         }
         *id = racers + 1;
