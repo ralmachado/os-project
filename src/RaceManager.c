@@ -1,3 +1,8 @@
+// David Valente Pereira Barros Leitão - 2019223148
+// Rodrigo Alexandre da Mota Machado - 2019218299
+
+// Race Manager process functions
+
 #include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>

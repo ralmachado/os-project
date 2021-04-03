@@ -1,3 +1,8 @@
+// David Valente Pereira Barros Leitão - 2019223148
+// Rodrigo Alexandre da Mota Machado - 2019218299
+
+// Breakdown Manager process functions
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
