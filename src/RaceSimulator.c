@@ -1,3 +1,8 @@
+// David Valente Pereira Barros Leitão - 2019223148
+// Rodrigo Alexandre da Mota Machado - 2019218299
+
+// Race Simulator process functions
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
