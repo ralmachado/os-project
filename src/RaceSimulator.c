@@ -10,9 +10,12 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <fcntl.h>
-#include <sys/types.h>
+#include <errno.h>
+#include <signal.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 
 #include "libs/RaceManager.h"
@@ -22,33 +25,47 @@
 
 #define DEBUG 0
 #define BUFFSIZE 128
+#define PIPE_NAME "manager"
 
 FILE* log_file;
 sem_t* mutex;
 
 void init_log();
-void init_shm();
-void init_sem();
-void read_conf(char* filename);
+void init_npipe();
 void init_proc(void (*function)(), void* arg);
+void init_sem();
+void init_shm();
 void log_message(char* message);
-void wait_childs(int n);
+void read_conf(char* filename);
 void terminate(int code);
+void wait_childs(int n);
+
+void sigint() {
+  signal(SIGINT, SIG_IGN);
+  puts("");
+  terminate(1);
+}
 
 int main(void) {
+    signal(SIGINT, sigint);
     init_sem();
     init_log();
-    log_message("Hello\n");
+    log_message("[Race Simulator] Hello\n");
 
     init_shm(configs);
+    init_npipe();
 
     read_conf("config.txt");
 
+    // Temp fix
+    signal(SIGINT, SIG_IGN);
     init_proc(race_manager, NULL);
     init_proc(breakdown_manager, NULL);
+    // Temp fix
+    signal(SIGINT, sigint);
 
     wait_childs(2);
-    
+
     terminate(0);
     return 0;
 }
@@ -64,7 +81,7 @@ void init_proc(void (*function)(), void* arg) {
     }
 }
 
-// Await for n child termination 
+// Await for n child termination
 void wait_childs(int n) {
     for (int i = 0; i < n; i++) wait(NULL);
 }
@@ -73,12 +90,16 @@ void wait_childs(int n) {
 void terminate(int code) {
     if (configs) {
         shmctl(configs_key, IPC_RMID, NULL);
-        log_message("Configs shared memory destroyed\n");
+        log_message("[Race Simulator] Configs shared memory destroyed\n");
         configs = NULL;
     }
 
+    if (unlink(PIPE_NAME) && errno != ENOENT) {
+      log_message("[Race Simulator] Couldn't close the named pipe");
+    }
+
     if (log_file) {
-        log_message("Goodbye\n");
+        log_message("[Race Simulator] Goodbye\n");
         fclose(log_file);
         log_file = NULL;
     }
@@ -99,22 +120,22 @@ void init_sem() {
 void init_shm() {
     configs_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
     if (configs_key == -1) {
-        log_message("Failed to get configs shared memory key\n");
+        log_message("[Race Simulator] Failed to get configs shared memory key\n");
         exit(1);
-    } else log_message("Configs shared memory created\n");
+    } else log_message("[Race Simulator] Configs shared memory created\n");
 
     configs = (sharedmem *) shmat(configs_key, NULL, 0);
     if (configs == NULL) {
-        log_message("Failed to attach to configs shared memory\n");
+        log_message("[Race Simulator] Failed to attach to configs shared memory\n");
         exit(1);
-    } else log_message("Configs shared memory attached\n");
+    } else log_message("[Race Simulator] Configs shared memory attached\n");
 }
 
 // Parse config file
 void read_conf(char* filename) {
     FILE* config;
     if ((config = fopen(filename, "r")) == NULL) {
-        log_message("Failed to open config file\n");
+        log_message("[Race Simulator] Failed to open config file\n");
         terminate(1);
     }
 
@@ -253,14 +274,23 @@ void read_conf(char* filename) {
     #endif
 
     fclose(config);
-    log_message("Configuration read\n");
+    log_message("[Race Simulator] Configuration read\n");
+}
+
+/* ----- Named Pipe ----- */
+
+void init_npipe() {
+  if (mkfifo(PIPE_NAME, O_CREAT|O_EXCL|0600)) {
+    log_message("[Race Simulator] Failed to create named pipe");
+    terminate(1);
+  }
 }
 
 /* ----- Logging Functions -----*/
 
 void init_log() {
-    if ((log_file = fopen("log.txt", "w+")) == NULL) {      
-        log_message("Failed to open log file\n");
+    if ((log_file = fopen("log.txt", "w+")) == NULL) {
+        log_message("[Race Simulator] Failed to open log file\n");
         exit(1);
     }
 }
