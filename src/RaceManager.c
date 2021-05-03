@@ -28,8 +28,8 @@ int fd_npipe;
 void spawn_teams() {
     int* id;
     if (!(id = malloc(sizeof(int)))) {
-        log_message("[Race Manager] Call to malloc failed\n");
-        log_message("[Race Manager] Process exiting\n");
+        log_message("[Race Manager] Call to malloc failed");
+        log_message("[Race Manager] Process exiting");
         wait_childs(configs->noTeams);
         exit(1);
     }
@@ -44,14 +44,14 @@ void init_boxes() {
     boxes_key = shmget(IPC_PRIVATE, sizeof(int)*configs->noTeams, IPC_EXCL|IPC_CREAT|0766);
     boxes = shmat(boxes_key, NULL, 0);
     for (int i = 0; i < configs->noTeams; i++) boxes[i] = 0;
-    log_message("[Race Manager] Boxes shared memory created and attached\n");
+    log_message("[Race Manager] Boxes shared memory created and attached");
 }
 
 void rm_boxes() {
     if (boxes) {
         shmctl(boxes_key, IPC_RMID, NULL);
         boxes = NULL;
-        log_message("[Race Manager] Boxes shared memory destroyed\n");
+        log_message("[Race Manager] Boxes shared memory destroyed");
     }
 }
 
@@ -61,7 +61,7 @@ void test_npipe() {
   do {
     if ((nread = read(fd_npipe, &buff, sizeof(buff))) > 0) {
       buff[nread-1] = 0;
-      snprintf(msg, sizeof(msg), "[Race Manager] RECEIVED: %s\n", buff);
+      snprintf(msg, sizeof(msg), "[Race Manager] RECEIVED: %s", buff);
       log_message(msg);
     }
   } while (strcmp(buff, "CLOSE") != 0);
@@ -79,26 +79,26 @@ int close_npipe() {
 
 void manage_int(int signum) {
   if (close_npipe())
-    log_message("[Race Manager] Failed to close named pipe\n");
-  else log_message("[Race Manager] Closed named pipe\n");
+    log_message("[Race Manager] Failed to close named pipe");
+  else log_message("[Race Manager] Closed named pipe");
 }
 
 // Race Manager process lives here
 void race_manager() {
   signal(SIGINT, manage_int);
-  log_message("[Race Manager] Process spawned\n");
+  log_message("[Race Manager] Process spawned");
   if (open_npipe()) {
-    log_message("[Race Manager] Failed to open named pipe\n");
-    log_message("[Race Manager] Process exiting\n");
+    log_message("[Race Manager] Failed to open named pipe");
+    log_message("[Race Manager] Process exiting");
     exit(0);
   }
-  log_message("[Race Manager] Open named pipe\n");
+  log_message("[Race Manager] Open named pipe");
   test_npipe();
   close_npipe();
   // init_boxes();
   // spawn_teams();
   // wait_childs(configs->noTeams);
   // rm_boxes();
-  log_message("[Race Manager] Process exiting\n");
+  log_message("[Race Manager] Process exiting");
   exit(0);
 }

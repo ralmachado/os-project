@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/ipc.h>
+#include <sys/msg.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -22,6 +23,7 @@
 #include "libs/TeamManager.h"
 #include "libs/BreakdownManager.h"
 #include "libs/SharedMem.h"
+#include "libs/MsgQueue.h"
 
 #define DEBUG 0
 #define BUFFSIZE 128
@@ -31,6 +33,7 @@ FILE* log_file;
 sem_t* mutex;
 
 void init_log();
+void init_mq();
 void init_npipe();
 void init_proc(void (*function)(), void* arg);
 void init_sem();
@@ -46,14 +49,23 @@ void sigint() {
   terminate(1);
 }
 
+void test_mq() {
+    msg my_msg;
+    my_msg.msgtype = 1;
+    my_msg.test = "This is a test";
+    msgsnd(mq_id, &my_msg, sizeof(my_msg)-sizeof(long), 0);
+}
+
 int main(void) {
     signal(SIGINT, sigint);
     init_sem();
     init_log();
-    log_message("[Race Simulator] Hello\n");
+    log_message("[Race Simulator] Hello");
 
     init_shm(configs);
     init_npipe();
+    init_mq();
+    test_mq();
 
     read_conf("config.txt");
 
@@ -90,16 +102,22 @@ void wait_childs(int n) {
 void terminate(int code) {
     if (configs) {
         shmctl(configs_key, IPC_RMID, NULL);
-        log_message("[Race Simulator] Configs shared memory destroyed\n");
+        log_message("[Race Simulator] Configs shared memory destroyed");
         configs = NULL;
     }
 
-    if (unlink(PIPE_NAME) && errno != ENOENT) {
+    if (unlink(PIPE_NAME) == -1 && errno != ENOENT) {
       log_message("[Race Simulator] Couldn't close the named pipe");
+    } else log_message("[Race Simulator] Named pipe destroyed");
+
+    if (mq_id != -1) {
+        if (msgctl(mq_id, IPC_RMID, NULL) == -1) 
+            log_message("[Race Simulator] Couldn't close the message queue");
+        else log_message("[Race Simulator] Message queue destroyed");
     }
 
     if (log_file) {
-        log_message("[Race Simulator] Goodbye\n");
+        log_message("[Race Simulator] Goodbye");
         fclose(log_file);
         log_file = NULL;
     }
@@ -120,22 +138,22 @@ void init_sem() {
 void init_shm() {
     configs_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
     if (configs_key == -1) {
-        log_message("[Race Simulator] Failed to get configs shared memory key\n");
+        log_message("[Race Simulator] Failed to get configs shared memory key");
         exit(1);
-    } else log_message("[Race Simulator] Configs shared memory created\n");
+    } else log_message("[Race Simulator] Configs shared memory created");
 
     configs = (sharedmem *) shmat(configs_key, NULL, 0);
     if (configs == NULL) {
-        log_message("[Race Simulator] Failed to attach to configs shared memory\n");
+        log_message("[Race Simulator] Failed to attach to configs shared memory");
         exit(1);
-    } else log_message("[Race Simulator] Configs shared memory attached\n");
+    } else log_message("[Race Simulator] Configs shared memory attached");
 }
 
 // Parse config file
 void read_conf(char* filename) {
     FILE* config;
     if ((config = fopen(filename, "r")) == NULL) {
-        log_message("[Race Simulator] Failed to open config file\n");
+        log_message("[Race Simulator] Failed to open config file");
         terminate(1);
     }
 
@@ -274,23 +292,36 @@ void read_conf(char* filename) {
     #endif
 
     fclose(config);
-    log_message("[Race Simulator] Configuration read\n");
+    log_message("[Race Simulator] Configuration read");
 }
 
 /* ----- Named Pipe ----- */
 
 void init_npipe() {
-  if (mkfifo(PIPE_NAME, O_CREAT|O_EXCL|0600)) {
-    log_message("[Race Simulator] Failed to create named pipe");
-    terminate(1);
-  }
+    if (mkfifo(PIPE_NAME, O_CREAT|O_EXCL|0600)) {
+        log_message("[Race Simulator] Failed to create named pipe");
+        terminate(1);
+    }
+
+    log_message("[Race Simulator] Created named pipe");
+}
+
+/* ----- Message Queue ----- */
+
+void init_mq() {
+    if ((mq_id = msgget(IPC_PRIVATE, IPC_CREAT|0600)) == -1) {
+        log_message("[Race Simulator] Failed to create the message queue");
+        terminate(1);
+    }
+
+    log_message("[Race Simulator] Created message queue");
 }
 
 /* ----- Logging Functions -----*/
 
 void init_log() {
     if ((log_file = fopen("log.txt", "w+")) == NULL) {
-        log_message("[Race Simulator] Failed to open log file\n");
+        log_message("[Race Simulator] Failed to open log file");
         exit(1);
     }
 }
@@ -303,7 +334,7 @@ void log_message(char* message) {
     strftime(time_s, sizeof(time_s), "%H:%M:%S ", time_2);
 
     // Print and write to log file
-    fprintf(log_file, "%s %s", time_s, message);
+    fprintf(log_file, "%s %s\n", time_s, message);
     fflush(log_file);
-    printf("%s %s", time_s, message);
+    printf("%s %s\n", time_s, message);
 }
