@@ -6,3 +6,8 @@
 RaceSimulator
 log.txt
 test*
+
+# Tasks
+TODO
+*.todo
+*.tasks
