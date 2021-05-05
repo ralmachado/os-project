@@ -26,6 +26,10 @@ void* vroom(void* r_id) {
     char buff[64];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", teamId, id);
     log_message(buff);
+    Car *me = &(shm->teams[teamId-1]->cars[id-1]);
+    me->fuel = configs.capacity;
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", teamId, id);
+    log_message(buff);
     sleep(2);
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", teamId, id);
     
@@ -79,6 +83,7 @@ void team_execute() {
 void team_init(int id, int pipe) {
     pipe_fd = pipe;
     teamId = id;
+    shm->teams[id-1]->id = id;
     write(pipe_fd, "FUCK", strlen("FUCK")+1);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", teamId);

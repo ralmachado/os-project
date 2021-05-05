@@ -3,6 +3,7 @@ typedef struct {
 } Config;
 
 typedef struct {
+    short int state;
     int position;
     int laps;
     int fuel;
@@ -12,16 +13,17 @@ typedef struct {
 } Car;
 
 typedef struct {
+    int id;
     Car* cars;
 } Team;
 
 typedef struct {
-    // Insert structs here
     int *boxes;
-    Team* teams;
+    Team **teams;
 } Sharedmem;
 
 enum Box{FREE, RESERVED, OCCUPPIED};
+enum State{RACE, SAFETY, BOX, QUIT, FINISH};
 
 Config configs;
 Sharedmem *shm;
