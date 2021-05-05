@@ -41,7 +41,7 @@ void init_shm();
 void log_message(char* message);
 void read_conf(char* filename);
 void terminate(int code);
-void wait_childs(int n);
+void wait_childs();
 
 void sigint() {
   signal(SIGINT, SIG_IGN);
@@ -57,7 +57,11 @@ void test_mq() {
 }
 
 int main(void) {
-    signal(SIGINT, sigint);
+    struct sigaction interrupt;
+    interrupt.sa_handler = sigint;
+    sigemptyset(&interrupt.sa_mask);
+    interrupt.sa_flags = 0;
+    sigaction(SIGINT, &interrupt, NULL);
     init_sem();
     init_log();
     log_message("[Race Simulator] Hello");
@@ -76,7 +80,7 @@ int main(void) {
     // Temp fix
     signal(SIGINT, sigint);
 
-    wait_childs(2);
+    while(wait(NULL) != -1);
 
     terminate(0);
     return 0;
@@ -94,8 +98,8 @@ void init_proc(void (*function)(), void* arg) {
 }
 
 // Await for n child termination
-void wait_childs(int n) {
-    for (int i = 0; i < n; i++) wait(NULL);
+void wait_childs() {
+    while (wait(NULL) != -1);
 }
 
 // Cleanup shared memory segments and close opened streams before exiting
