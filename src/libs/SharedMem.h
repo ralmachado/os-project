@@ -1,7 +1,28 @@
-typedef struct mem_struct {
+typedef struct {
     int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
-} sharedmem;
+} Config;
 
-sharedmem* configs;
-int* boxes;
-int configs_key, boxes_key;
+typedef struct {
+    int position;
+    int laps;
+    int fuel;
+    int stops;
+    int malfunctions;
+    int topup;
+} Car;
+
+typedef struct {
+    Car* cars;
+} Team;
+
+typedef struct {
+    // Insert structs here
+    int *boxes;
+    Team* teams;
+} Sharedmem;
+
+enum Box{FREE, RESERVED, OCCUPPIED};
+
+Config configs;
+Sharedmem *shm;
+int shmid;

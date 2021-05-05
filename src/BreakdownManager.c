@@ -21,7 +21,7 @@ char buff[64];
 
 void get_msg() {
     msg my_msg;
-    msgrcv(mq_id, &my_msg, sizeof(msg)-sizeof(long), 0, 0);
+    msgrcv(mqid, &my_msg, sizeof(msg)-sizeof(long), 0, 0);
     char buff[128];
     snprintf(buff, sizeof(buff), "[Breakdown Manager] Message: %s", my_msg.test);
     log_message(buff);
@@ -29,19 +29,9 @@ void get_msg() {
 
 void breakdown_manager() {
     mutex = sem_open("MUTEX", 0);
-    sem_wait(mutex);
     log_message("[Breakdown Manager] Process spawned");
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBreakdown -> %d", configs->tBreakdown);
-    log_message(buff);
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMin -> %d", configs->tBoxMin);
-    log_message(buff);
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMax -> %d", configs->tBoxMax);
-    log_message(buff);
-    get_msg();
-    sem_post(mutex);
+    // Does its thing...
     sleep(5);
-    sem_wait(mutex);
     log_message("[Breakdown Manager] Process exiting");
-    sem_post(mutex);
     exit(0);
 }
