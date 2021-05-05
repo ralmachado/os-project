@@ -83,9 +83,7 @@ void team_execute() {
 }
 
 // Setup Team Manager
-void team_init(void* id) {
-    teamId = *(int*)id;
-    free(id);
+void team_init(int teamId) {
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", teamId);
     sem_wait(mutex);

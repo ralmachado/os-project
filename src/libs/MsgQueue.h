@@ -1,3 +1,5 @@
+/* ----- Message Queue ----- */
+
 typedef struct {
     long msgtype;
     // TODO define message struct
