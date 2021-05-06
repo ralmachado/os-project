@@ -3,15 +3,15 @@
 
 // Race Simulator process functions
 
+#include <errno.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <signal.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/shm.h>
@@ -19,11 +19,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "libs/RaceManager.h"
-#include "libs/TeamManager.h"
 #include "libs/BreakdownManager.h"
-#include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
+#include "libs/RaceManager.h"
+#include "libs/SharedMem.h"
+#include "libs/TeamManager.h"
 
 #define DEBUG 0
 #define PIPE_NAME "manager"
@@ -218,5 +218,6 @@ void log_message(char* message) {
 }
 
 void get_statistics() {
+    // TODO Implement statistics
     puts("HAHAHA GET FUCKED NERD");
 }

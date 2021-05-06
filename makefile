@@ -8,14 +8,14 @@ ${OUT}: ${OBJS}
 	${CC} ${FLAGS} ${OBJS} -o $@
 
 clean:
-	rm ${OBJS}
+	rm -f ${OBJS}
 
 debug:
 	${CC} -g -c ${SRC}
 	${CC} ${FLAGS} -g ${OBJS} -o ${OUT}
 
-.c .o:
-	${CC} -c $< -o $@
+%.o: %.c
+	${CC} ${FLAGS} -c $< -o $@
 
 ####################################
 
