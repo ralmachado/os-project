@@ -244,6 +244,11 @@ void team_execute() {
     char buff[BUFFSIZE];
     for (int i = 0; i < 2; i++)
         spawn_car();
+    /*
+    for (int i = 0; i < team->racers; i++) {
+        spawn_car();
+    }
+    */
 
     pthread_create(&box_t, NULL, car_box, NULL);
     sleep(2);
@@ -263,7 +268,7 @@ void team_execute() {
 // Setup Team Manager
 void team_init(int id, int pipe) {
     pipe_fd = pipe;
-    team = shm->teams[id-1];
+    team = &(shm->teams[id-1]);
     team->id = id;
     team->box = FREE;
     write(pipe_fd, "FUCK", strlen("FUCK")+1);
