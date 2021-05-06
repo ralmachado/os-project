@@ -109,10 +109,15 @@ void npipe_opts(char *opt, int size) {
     if (strcmp(opt, "START RACE!") == 0) {
         // TODO start race if not started yet, else complain!
     } else {
-        char *token = strtok(opt, " ");
+        char *token = strtok_r(opt, " ", &opt);
         if (strcmp(token, "ADDCAR ") == 0) {
             // TODO if race already started reject
             // TODO else keep tokenizing and add new car
+            token = strtok_r(opt, "TEAM: ", &opt);
+            token = strtok_r(opt, "CAR: ", &opt);
+            token = strtok_r(opt, "SPEED: ", &opt);
+            token = strtok_r(opt, "CONSUMPTION: ", &opt);
+            token = strtok_r(opt, "RELIABILITY: ", &opt);
         }
     }
 }

@@ -50,9 +50,9 @@ void sigint() {
 
 void test_mq() {
     msg my_msg;
-    my_msg.msgtype = 1;
+    my_msg.team = 1;
     my_msg.test = "This is a test";
-    msgsnd(mqid, &my_msg, sizeof(my_msg)-sizeof(long), 0);
+    msgsnd(mqid, &my_msg, msglen, 0);
 }
 
 int main(void) {
@@ -181,6 +181,7 @@ void init_mq() {
     }
 
     log_message("[Race Simulator] Created message queue");
+    msglen = sizeof(msg)-sizeof(long);
 }
 
 /* ----- Logging Functions -----*/
