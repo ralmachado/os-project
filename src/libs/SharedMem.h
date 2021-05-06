@@ -1,7 +1,36 @@
-typedef struct mem_struct {
-    int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
-} sharedmem;
+#define BUFFSIZE 256
 
-sharedmem* configs;
-int* boxes;
-int configs_key, boxes_key;
+typedef struct {
+    int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
+} Config;
+
+typedef struct {
+    short int state;
+    int speed;
+    int consumption;
+    int reliability;
+    int fuel;
+    int position;
+    int laps;
+    int stops;
+    int malfunctions;
+    int topup;
+} Car;
+
+typedef struct {
+    int id;
+    int racers;
+    int box;
+    Car *cars;
+} Team;
+
+typedef struct {
+    Team **teams;
+} Sharedmem;
+
+enum Box{FREE, RESERVED, OCCUPPIED};
+enum State{RACE, SAFETY, BOX, QUIT, FINISH};
+
+Config configs;
+Sharedmem *shm;
+int shmid;
