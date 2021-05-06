@@ -3,6 +3,7 @@
 
 // Team Manager process functions
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +14,7 @@
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
 
-pthread_t* cars;
+pthread_t* cars, box_t;
 pthread_mutex_t box_state = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t repair_cv = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t repair_mutex= PTHREAD_MUTEX_INITIALIZER;
@@ -24,6 +25,10 @@ int in_box = -1;
 Team *team;
 
 extern void log_message();
+
+void thread_exit() {
+    pthread_exit(NULL);
+}
 
 // I have no idea if any of the code I am writing here will even work...
 void race(Car *me, int id) {
@@ -113,10 +118,10 @@ void* vroom(void* r_id) {
     log_message(buff);
     Car *me = &(team->cars[id-1]);
     // FIX delegate initialization to named pipe late
-    me->fuel = configs.capacity;
-    me->position = 0;
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", team->id, id);
-    log_message(buff);
+    // me->fuel = configs.capacity;
+    // me->position = 0;
+    // snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", team->id, id);
+    // log_message(buff);
     sleep(2); // TODO Don't forget to get rid of this sleep
     // Race function (race())
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
@@ -127,7 +132,16 @@ void* vroom(void* r_id) {
 }
 
 // TODO don't forget to spawn thread
-void* box_t() {
+void* car_box() {
+    char buff[BUFFSIZE];
+    snprintf(buff, sizeof(buff), "[Team Manager #%d] Box is open", team->id);
+    log_message(buff);
+    struct sigaction sig;
+    sig.sa_handler = thread_exit;
+    sigemptyset(&sig.sa_mask);
+    sig.sa_flags = 0;
+    sigaction(SIGINT, &sig, NULL);
+    
     srand(pthread_self());
     while (1) {
         sem_wait(&box_worker);
@@ -176,7 +190,7 @@ void join_threads() {
 
 }
 
-void destroy_pthreads() {
+void team_destroy() {
     char buff[BUFFSIZE];
 
     if (close(pipe_fd)) {
@@ -227,11 +241,18 @@ void destroy_pthreads() {
 
 // Team Manager process lives here
 void team_execute() {
-    char buff[64];
+    char buff[BUFFSIZE];
     for (int i = 0; i < 2; i++)
         spawn_car();
 
+    pthread_create(&box_t, NULL, car_box, NULL);
+    sleep(2);
+    pthread_kill(box_t, SIGINT);
+    pthread_join(box_t, NULL);
+    snprintf(buff, sizeof(buff), "[Team Manager #%d] Box closed", team->id);
+    log_message(buff);
     join_threads();
+
 
     team_destroy();
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", team->id);
