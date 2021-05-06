@@ -13,6 +13,8 @@
 
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
+#define RAND 100
+
 
 extern void log_message();
 
@@ -27,11 +29,27 @@ void get_msg() {
     log_message(buff);
 }
 
+void create_break(){
+    while(1){
+        msg breakdown;
+        srand(getpid());
+        int odds = rand([0,RAND]);
+        for (int k = 0; k<configs.noTeams){
+            int rl = shm->teams[k]->cars.reliability;
+            if (odds >= rl){
+                msgsnd(mq_id,&breakdown, sizeof(msg)-sizeof(long),0);
+            }
+        }
+    }
+    sleep(configs->tBreakdown);
+}
+
 void breakdown_manager() {
     mutex = sem_open("MUTEX", 0);
     log_message("[Breakdown Manager] Process spawned");
     // Does its thing...
     sleep(5);
     log_message("[Breakdown Manager] Process exiting");
+    sem_close(mutex);
     exit(0);
 }
