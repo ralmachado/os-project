@@ -159,10 +159,13 @@ int init_shm() {
         log_message("[Race Simulator] Failed to attach shared memory segment");
         return -1;
     } log_message("[Race Simulator] Shared memory segment attached");
-    shm->teams = malloc(sizeof(Team*)*(configs.noTeams));
+    
+    shm->teams = malloc(sizeof(Team)*(configs.noTeams));
     for (int i = 0; i < configs.noTeams; i++) {
-        (shm->teams[i])->cars = malloc(sizeof(Car)*(configs.maxCars));
+        shm->teams[i].init = false;
+        shm->teams[i].cars = malloc(sizeof(Car)*(configs.maxCars));
     }
+
     return 0;
 }
 

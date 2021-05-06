@@ -105,20 +105,91 @@ void test_pipes() {
     }
 }
 
+Team* find_team(char *team_name) {
+    for (int i = 0; i < configs.noTeams; i++) {
+        if (shm->teams[i].init == false) {
+            shm->teams[i].init = true;
+            strncpy(shm->teams[i].name, team_name, sizeof(shm->teams[i].name));
+            return &(shm->teams[i]);
+        } else if (strcmp(shm->teams[i].name, team_name) == 0) return &(shm->teams[i]);
+    }
+    return NULL;
+}
+
+void add_car(char *team_name, int car, int speed, int consumption, int reliability) {
+    char buff[BUFFSIZE];
+    Team *team;
+    if (!(team = find_team(team_name))) {
+        snprintf(buff, sizeof(buff), "[Race Manager] Couldn't find or allocate team %s", team_name);
+        log_message(buff);
+        return;
+    }
+    for (int i = 0; i < team->racers; i++) {
+        if (team->cars[i].number == car) {
+            snprintf(buff, sizeof(buff), "[Race Manager] Team %s already has car %d", team_name, car);
+            log_message(buff);
+            return;
+        }
+    }
+    if (team->racers == configs.maxCars) {
+        snprintf(buff, sizeof(buff), "[Race Manager] Team %s is already full", team_name);
+        log_message(buff);
+        return;
+    }
+
+    team->cars[++(team->racers)].speed = speed;
+    team->cars[team->racers].reliability = reliability;
+    team->cars[team->racers].fuel = configs.capacity;
+    team->cars[team->racers].lowFuel = false;
+    team->cars[team->racers].malfunction = false;
+    team->cars[team->racers].position = 0;
+    team->cars[team->racers].stops = 0;
+
+    snprintf(buff, sizeof(buff), 
+        "[Race Manager] New car => Team: %s, Speed: %d, Consumption: %d, Reliability: %d", 
+        team_name, car, speed, consumption, reliability);
+}
+
 void npipe_opts(char *opt, int size) {
+    char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE!") == 0) {
         // TODO start race if not started yet, else complain!
-    } else {
-        char *token = strtok_r(opt, " ", &opt);
-        if (strcmp(token, "ADDCAR ") == 0) {
-            // TODO if race already started reject
-            // TODO else keep tokenizing and add new car
-            token = strtok_r(opt, "TEAM: ", &opt);
-            token = strtok_r(opt, "CAR: ", &opt);
-            token = strtok_r(opt, "SPEED: ", &opt);
-            token = strtok_r(opt, "CONSUMPTION: ", &opt);
-            token = strtok_r(opt, "RELIABILITY: ", &opt);
+    } else if (strncmp(opt, "ADDCAR", 6) == 0) {
+        // TODO if race already started reject
+        char *token = strtok_r(opt, "ADDCAR ", &opt);
+        char team[BUFFSIZE];
+        int car, speed, consumption, reliability;
+        if ((token = strtok_r(opt, " ", &opt))) {
+            strncpy(team, token, sizeof(team));
         }
+        if ((token = strtok_r(opt, " ", &opt))) {
+            if ((car = atoi(token)) <= 0) {
+                log_message("[Race Manager] Invalid car configuration received");
+                return;
+            }
+        }
+        if ((token = strtok_r(opt, " ", &opt))) {
+            if ((speed = atoi(token)) <= 0) {
+                log_message("[Race Manager] Invalid car configuration received");
+                return;
+            }
+        }
+        if ((token = strtok_r(opt, " ", &opt))) {
+            if ((consumption = atoi(token)) <= 0) {
+                log_message("[Race Manager] Invalid car configuration received");
+                return;
+            }
+        }
+        if ((token = strtok_r(opt, " ", &opt))) {
+            if ((reliability = atoi(token)) <= 0) {
+                log_message("[Race Manager] Invalid car configuration received");
+                return;
+            }
+        }
+        add_car(team, car, speed, consumption, reliability);
+    } else {
+        snprintf(buff, sizeof(buff), "[Race Manager] Invalid command: %s", opt);
+        log_message(buff);
     }
 }
 
@@ -143,6 +214,11 @@ void pipe_listener() {
             for (i = 0; i < configs.noTeams; i++) {
                 if (FD_ISSET(*(upipes+i), &read_set)) {
                     // TODO Get updates from Teams 
+                    nread = read(fd_npipe, buff, sizeof(buff));
+                    if (nread > 0) {
+                        buff[nread-1] = 0;
+                        // TODO Figure out what the updates do?
+                    }
                 }
             }
         }
