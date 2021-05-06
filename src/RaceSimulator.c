@@ -50,7 +50,7 @@ void sigint() {
 
 void test_mq() {
     msg my_msg;
-    my_msg.team = 1;
+    my_msg.msgtype = 1;
     my_msg.test = "This is a test";
     msgsnd(mqid, &my_msg, msglen, 0);
 }
