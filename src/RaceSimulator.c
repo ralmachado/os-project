@@ -199,6 +199,7 @@ void init_log() {
 }
 
 void log_message(char* message) {
+    sem_wait(mutex);
     // Get current time
     char time_s[10];
     time_t time_1 = time(NULL);
@@ -206,7 +207,6 @@ void log_message(char* message) {
     strftime(time_s, sizeof(time_s), "%H:%M:%S ", time_2);
 
     // Print and write to log file
-    sem_wait(mutex);
     fprintf(log_file, "%s %s\n", time_s, message);
     fflush(log_file);
     printf("%s %s\n", time_s, message);
