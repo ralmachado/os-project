@@ -31,6 +31,7 @@
 FILE* log_file;
 sem_t* mutex;
 
+void get_statistics();
 void init_log();
 void init_mq();
 void init_npipe();
@@ -56,8 +57,11 @@ void test_mq() {
 }
 
 int main(void) {
-    struct sigaction interrupt;
+    struct sigaction interrupt, statistics;
     interrupt.sa_handler = sigint;
+    statistics.sa_handler = get_statistics;
+    sigemptyset(&statistics.sa_mask);
+    statistics.sa_flags = 0;
     sigemptyset(&interrupt.sa_mask);
     interrupt.sa_flags = 0;
     sigaction(SIGINT, &interrupt, NULL);
@@ -78,6 +82,7 @@ int main(void) {
     init_proc(breakdown_manager, NULL);
     // Temp fix
     signal(SIGINT, sigint);
+    sigaction(SIGTSTP, &statistics, NULL);
 
     while(wait(NULL) != -1);
 
@@ -207,4 +212,8 @@ void log_message(char* message) {
     printf("%s %s\n", time_s, message);
     fflush(stdout);
     sem_post(mutex);
+}
+
+void get_statistics() {
+    puts("HAHAHA GET FUCKED NERD");
 }
