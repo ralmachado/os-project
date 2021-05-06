@@ -9,10 +9,12 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sys/msg.h>
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
 
 pthread_t* cars;
+pthread_mutex_t fastmutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t* mutex;
 int racers = 0, * box;
 int pipe_fd;
@@ -20,14 +22,21 @@ Team *team;
 
 extern void log_message();
 
+// I have no idea if any of the code I am writing here will even work...
 void race(Car *me, int id) {
+    // TODO Receive breakdown messages
+    // msg ohno;
+    // msgrcv(mqid, &ohno, msglen, *FIXME*, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
+
     if (me->fuel == 0 && !(me->state == QUIT)) {
         me->state = QUIT;
         // TODO Update team and make car stop race
+        pause(); // Maybe just pause the thread?
     }
 
     if (me->state == RACE && (me->fuel) < 4*(me->consumption)*(configs.lapDistance)/(me->speed)) {
         // TODO Try to get in box
+        if (team->box == FREE) team->box == RESERVED;
     }
 
     if (me->state == RACE && (me->fuel) < 2*(me->consumption)*(configs.lapDistance)/(me->speed)) {
@@ -43,7 +52,17 @@ void race(Car *me, int id) {
             break;
         case SAFETY:
             me->fuel -= 0.4*(me->consumption);
-            if (me->position + 0.3 * (me->speed)) me->laps += 1;
+            if (me->position + 0.3 * (me->speed) > configs.lapDistance) {
+                me->laps += 1;
+                // TODO think about creating mutex to check box state here
+                pthread_mutex_lock(&fastmutex);
+                if (team->box == RESERVED) {
+                    me->position = 0;
+                    me->state = BOX;
+                    team->box == OCCUPPIED;
+                }
+                pthread_mutex_unlock(&fastmutex);
+            }
             me->position += 0.3 * me->speed;
             me->position %= configs.lapDistance;
             break;
@@ -97,6 +116,8 @@ void join_threads() {
 
 }
 
+// TODO create signal handler
+
 // Team Manager process lives here
 void team_execute() {
     char buff[64];
@@ -108,6 +129,7 @@ void team_execute() {
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", team->id);
     log_message(buff);
     close(pipe_fd);
+    pthread_mutex_destroy(&fastmutex);
     exit(0);
 }
 
