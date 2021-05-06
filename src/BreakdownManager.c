@@ -3,6 +3,7 @@
 
 // Breakdown Manager process functions
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,8 +19,11 @@
 
 extern void log_message();
 
-sem_t *mutex;
-char buff[64];
+char buff[BUFFSIZE];
+
+void breakdown_int(int signum) {
+    if (signum == SIGINT) exit(0);
+} 
 
 void get_msg() {
     msg my_msg;
@@ -50,11 +54,16 @@ void create_break(){
 }
 
 void breakdown_manager() {
-    mutex = sem_open("MUTEX", 0);
+    struct sigaction sigint;
+    sigint.sa_handler = breakdown_int;
+    sigemptyset(&sigint.sa_mask);
+    sigaddset(&sigint.sa_mask, SIGTSTP);
+    sigint.sa_flags = 0;
+    sigaction(SIGINT, &sigint, NULL);
+    
     log_message("[Breakdown Manager] Process spawned");
     // Does its thing...
     sleep(5);
     log_message("[Breakdown Manager] Process exiting");
-    sem_close(mutex);
     exit(0);
 }
