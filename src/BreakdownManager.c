@@ -13,6 +13,8 @@
 
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
+#define RAND 100
+
 
 extern void log_message();
 
@@ -27,15 +29,30 @@ void get_msg() {
     log_message(buff);
 }
 
+void create_break(){
+    while(1){
+        msg breakdown;
+        srand(getpid());
+        int odds = rand([0,RAND]);
+        for (int k = 0; k<configs.noTeams){
+            int rl = shm->teams[k]->cars.reliability;
+            if (odds >= rl){
+                msgsnd(mq_id,&breakdown, sizeof(msg)-sizeof(long),0);
+            }
+        }
+    }
+    sleep(configs->tBreakdown);
+}
+
 void breakdown_manager() {
     mutex = sem_open("MUTEX", 0);
     sem_wait(mutex);
     log_message("[Breakdown Manager] Process spawned");
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBreakdown -> %d", configs->tBreakdown);
+    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBreakdown -> %d", configs.tBreakdown);
     log_message(buff);
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMin -> %d", configs->tBoxMin);
+    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMin -> %d", configs.tBoxMin);
     log_message(buff);
-    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMax -> %d", configs->tBoxMax);
+    snprintf(buff, sizeof(buff)-1, "[Breakdown Manager] tBoxMax -> %d", configs.tBoxMax);
     log_message(buff);
     get_msg();
     sem_post(mutex);
