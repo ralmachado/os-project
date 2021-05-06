@@ -13,8 +13,8 @@
 
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
-#define RAND 100
 
+#define RAND 100
 
 extern void log_message();
 
@@ -30,18 +30,23 @@ void get_msg() {
 }
 
 void create_break(){
+    // TODO Update when know how to id each car, yes?
     while(1){
         msg breakdown;
+        // breakdown.msgtype = ?;
         srand(getpid());
-        int odds = rand([0,RAND]);
-        for (int k = 0; k<configs.noTeams){
-            int rl = shm->teams[k]->cars.reliability;
-            if (odds >= rl){
-                msgsnd(mq_id,&breakdown, sizeof(msg)-sizeof(long),0);
+        int odds = rand() % RAND;
+        for (int k = 0; k < configs.noTeams; k++) {
+            for (int m = 0; m < configs.maxCars; m++) {
+                int rl = shm->teams[k]->cars[m].reliability;
+                if (rl != -1 && odds >= rl) {
+                    msgsnd(mqid, &breakdown, msglen, 0);
+                }
             }
         }
     }
-    sleep(configs->tBreakdown);
+
+    sleep(configs.tBreakdown);
 }
 
 void breakdown_manager() {
