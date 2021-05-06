@@ -41,7 +41,7 @@ void create_break(){
         srand(getpid());
         int odds = rand() % RAND;
         for (int k = 0; k < configs.noTeams; k++) {
-            for (int m = 0; m < configs.maxCars; m++) {
+            for (int m = 0; m < shm->teams[k]->racers; m++) {
                 int rl = shm->teams[k]->cars[m].reliability;
                 if (rl != -1 && odds >= rl) {
                     msgsnd(mqid, &breakdown, msglen, 0);

@@ -1,30 +1,42 @@
 #define BUFFSIZE 256
+#define true 1
+#define false 0
 
-typedef struct {
-    int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
+typedef struct config_struct {
+    int timeUnit;
+    int lapDistance;
+    int lapCount;
+    int noTeams;
+    int maxCars;
+    int tBreakdown;
+    int tBoxMin;
+    int tBoxMax;
+    int capacity;
 } Config;
 
-typedef struct {
+typedef struct car_struct {
     short int state;
+    short int lowFuel;
+    short int malfunction;
     int speed;
     int consumption;
     int reliability;
-    int fuel;
     int position;
     int laps;
+    int fuel;
     int stops;
-    int malfunctions;
-    int topup;
 } Car;
 
-typedef struct {
+typedef struct team_struct {
     int id;
     int racers;
-    int box;
+    short int box;
     Car *cars;
 } Team;
 
-typedef struct {
+typedef struct shared_struct {
+    int malfunctions;
+    int topup;
     Team **teams;
 } Sharedmem;
 
