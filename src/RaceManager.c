@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ipc.h>
+#include <sys/select.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -16,7 +17,6 @@
 #include <unistd.h>
 #include "libs/SharedMem.h"
 #include "libs/TeamManager.h"
-#include "libs/UnnamedPipes.h"
 
 #define PIPE_NAME "manager"
 
@@ -25,56 +25,47 @@ extern void wait_childs();
 extern void init_proc();
 
 int fd_npipe = -1;
-int(*pipes)[2] = NULL;
+int *upipes = NULL;
+fd_set read_set;
 
 void manager_term(int code) {
     while (wait(NULL) != -1);
     if (fd_npipe != -1) close(fd_npipe);
-    if (pipes) shmctl(pipes_id, IPC_RMID, NULL);
-    if (boxes) shmctl(boxes_key, IPC_RMID, NULL);
-    if (code == -1) exit(code);
-    exit(0);
+    if (upipes) free(upipes);
+    log_message("[Race Manager] Process exiting");
+    exit(code);
+}
+
+void manager_int(int signum) {
+    if (signum == SIGINT) manager_term(0);
 }
 
 int store_unnamed() {
-    pipes_id = shmget(IPC_PRIVATE, sizeof(configs->noTeams) * sizeof(int[2]), IPC_CREAT | 0600);
-    if (pipes_id == -1) {
-        log_message("[Race Manager] Failed to get unnamed pipes shm identifier");
-        return 0;
-    } else if (!(pipes = shmat(pipes_id, NULL, 0))) {
-        log_message("[Race Manager] Failed to open unnamed pipes storage");
-        return 0;
+    upipes = malloc(sizeof(configs.noTeams)*sizeof(int));
+    if (!upipes) {
+        log_message("[Race Manager] Failed to allocate pipe descriptor array");
+        return -1;
     }
     log_message("[Race Manager] Opened unnamed pipes storage");
-    return 1;
+    return 0;
 }
 
 // Create Team Manager processes
 void spawn_teams() {
-    for (int i = 0; i < configs->noTeams; i++) {
-        if (pipe(*(pipes + i))) {
+    for (int i = 0; i < configs.noTeams; i++) {
+        int fd[2];
+        if (pipe(fd)) {
             log_message("[Race Manager] Failed to open unnamed pipe");
             manager_term(1);
         }
         if (fork() == 0) {
-            team_init(i+1);
+            // Tenho os fd dos pipes em shared memory, mas uma alternativa seria guardar num malloc
+            // e passar por argumento para o novo processo?
+            close(fd[0]);
+            team_init(i+1, fd[1]);
         }
-    }
-}
-
-// Initialize noTeams boxes in shared memory
-void init_boxes() {
-    boxes_key = shmget(IPC_PRIVATE, sizeof(int) * configs->noTeams, IPC_EXCL | IPC_CREAT | 0766);
-    boxes = shmat(boxes_key, NULL, 0);
-    for (int i = 0; i < configs->noTeams; i++) boxes[i] = 0;
-    log_message("[Race Manager] Boxes shared memory created and attached");
-}
-
-void rm_boxes() {
-    if (boxes) {
-        shmctl(boxes_key, IPC_RMID, NULL);
-        boxes = NULL;
-        log_message("[Race Manager] Boxes shared memory destroyed");
+        close(fd[1]);
+        *(upipes+i) = fd[0];
     }
 }
 
@@ -91,44 +82,87 @@ void test_npipe() {
 }
 
 int open_npipe() {
-    if ((fd_npipe = open(PIPE_NAME, O_RDWR)) == -1)
+    if ((fd_npipe = open(PIPE_NAME, O_RDWR)) == -1) {
+        log_message("[Race Manager] Failed to open named pipe");
         return 1;
+    }
+    log_message("[Race Manager] Open named pipe");
     return 0;
 }
 
-int close_npipe() {
-    return close(fd_npipe);
+void test_pipes() {
+    fd_set teams;
+    FD_ZERO(&teams);
+    for (int i = 0; i < configs.noTeams; i++)
+        FD_SET(*(upipes+i), &teams);
+
+    char buff[64], log[512];
+    int n = read(*(upipes), buff, sizeof(buff));
+    if (n > 0) {
+        buff[n] = 0;
+        snprintf(log, sizeof(log), "[Race Manager] Car 1 says: %s", buff);
+        log_message(log);
+    }
 }
 
-void manage_int(int signum) {
-    if (close_npipe())
-        log_message("[Race Manager] Failed to close named pipe");
-    else log_message("[Race Manager] Closed named pipe");
+void npipe_opts(char *opt, int size) {
+    if (strcmp(opt, "START RACE!") == 0) {
+        // TODO start race if not started yet, else complain!
+    } else {
+        char *token = strtok_r(opt, " ", &opt);
+        if (strcmp(token, "ADDCAR ") == 0) {
+            // TODO if race already started reject
+            // TODO else keep tokenizing and add new car
+            token = strtok_r(opt, "TEAM: ", &opt);
+            token = strtok_r(opt, "CAR: ", &opt);
+            token = strtok_r(opt, "SPEED: ", &opt);
+            token = strtok_r(opt, "CONSUMPTION: ", &opt);
+            token = strtok_r(opt, "RELIABILITY: ", &opt);
+        }
+    }
+}
+
+void pipe_listener() {
+    int i, nread;
+    char buff[BUFFSIZE];
+    while (1) {
+        FD_ZERO(&read_set);
+        for (i = 0; i < configs.noTeams; i++)
+            FD_SET(*(upipes+i), &read_set);
+        
+        if (select(*(upipes+configs.noTeams), &read_set, NULL, NULL, NULL)) {
+            if (FD_ISSET(fd_npipe, &read_set)) { 
+                // TODO Implement Named Pipe commands
+                nread = read(fd_npipe, buff, sizeof(buff));
+                if (nread > 0) {
+                    buff[nread-1] = 0;
+                    npipe_opts(buff, sizeof(buff)); // todo Implementing this
+                }
+            }
+            
+            for (i = 0; i < configs.noTeams; i++) {
+                if (FD_ISSET(*(upipes+i), &read_set)) {
+                    // TODO Get updates from Teams 
+                }
+            }
+        }
+    }
 }
 
 // Race Manager process lives here
 void race_manager() {
     struct sigaction sigint;
-    sigint.sa_handler = manage_int;
+    sigint.sa_handler = manager_int;
     sigemptyset(&sigint.sa_mask);
+    sigaddset(&sigint.sa_mask, SIGTSTP);
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
-    log_message("[Race Manager] Process spawned");
-    if (open_npipe()) {
-        log_message("[Race Manager] Failed to open named pipe");
-        log_message("[Race Manager] Process exiting");
-        exit(0);
-    }
 
-    log_message("[Race Manager] Open named pipe");
-    if (!store_unnamed()) manager_term(1);
-    init_boxes();
+    log_message("[Race Manager] Process spawned");
+    if (open_npipe()) manager_term(1);
+    if (store_unnamed()) manager_term(1);
     spawn_teams();
-    //   wait_childs();
-    //   rm_boxes();
-    test_npipe();
-    //   close_npipe();
+    test_pipes();
+    // pipe_listener();
     manager_term(0);
-    log_message("[Race Manager] Process exiting");
-    exit(0);
 }

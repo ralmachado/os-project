@@ -26,7 +26,6 @@
 #include "libs/MsgQueue.h"
 
 #define DEBUG 0
-#define BUFFSIZE 128
 #define PIPE_NAME "manager"
 
 FILE* log_file;
@@ -36,10 +35,10 @@ void init_log();
 void init_mq();
 void init_npipe();
 void init_proc(void (*function)(), void* arg);
-void init_sem();
-void init_shm();
+int init_sem();
+int init_shm();
 void log_message(char* message);
-void read_conf(char* filename);
+extern void read_conf(char* filename);
 void terminate(int code);
 void wait_childs();
 
@@ -53,7 +52,7 @@ void test_mq() {
     msg my_msg;
     my_msg.msgtype = 1;
     my_msg.test = "This is a test";
-    msgsnd(mq_id, &my_msg, sizeof(my_msg)-sizeof(long), 0);
+    msgsnd(mqid, &my_msg, msglen, 0);
 }
 
 int main(void) {
@@ -62,14 +61,14 @@ int main(void) {
     sigemptyset(&interrupt.sa_mask);
     interrupt.sa_flags = 0;
     sigaction(SIGINT, &interrupt, NULL);
-    init_sem();
+
+    if (init_sem()) terminate(1);
     init_log();
     log_message("[Race Simulator] Hello");
 
-    init_shm(configs);
+    if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
-    test_mq();
 
     read_conf("config.txt");
 
@@ -104,18 +103,21 @@ void wait_childs() {
 
 // Cleanup shared memory segments and close opened streams before exiting
 void terminate(int code) {
-    if (configs) {
-        shmctl(configs_key, IPC_RMID, NULL);
-        log_message("[Race Simulator] Configs shared memory destroyed");
-        configs = NULL;
+    while (wait(NULL) != -1);
+    if (shm) {
+        if (shm->teams) free(shm->teams);
+        if (shmctl(shmid, IPC_RMID, NULL) == -1)
+            log_message("[Race Simulator] Shared memory couldn't be destroyed");
+        else log_message("[Race Simulator] Shared memory destroyed");
+        shm = NULL;
     }
 
     if (unlink(PIPE_NAME) == -1 && errno != ENOENT) {
       log_message("[Race Simulator] Couldn't close the named pipe");
     } else log_message("[Race Simulator] Named pipe destroyed");
 
-    if (mq_id != -1) {
-        if (msgctl(mq_id, IPC_RMID, NULL) == -1) 
+    if (mqid != -1) {
+        if (msgctl(mqid, IPC_RMID, NULL) == -1) 
             log_message("[Race Simulator] Couldn't close the message queue");
         else log_message("[Race Simulator] Message queue destroyed");
     }
@@ -132,171 +134,31 @@ void terminate(int code) {
     exit(code);
 }
 
-void init_sem() {
+int init_sem() {
     sem_unlink("MUTEX");
     mutex = sem_open("MUTEX", O_CREAT|O_EXCL, 0766, 1);
+    if (mutex == SEM_FAILED) return 1;
+    return 0;
 }
 
 /* ----- Shared Memory Initialization (Configs) ----- */
 
-void init_shm() {
-    configs_key = shmget(IPC_PRIVATE, sizeof(sharedmem), IPC_EXCL|IPC_CREAT|0766);
-    if (configs_key == -1) {
-        log_message("[Race Simulator] Failed to get configs shared memory key");
-        exit(1);
-    } else log_message("[Race Simulator] Configs shared memory created");
+int init_shm() {
+    shmid = shmget(IPC_PRIVATE, sizeof(shm), IPC_EXCL|IPC_CREAT|0766);
+    if (shmid == -1) {
+        log_message("[Race Simulator] Failed to get shared memory key");
+        return -1;
+    } log_message("[Race Simulator] Shared memory created");
 
-    configs = (sharedmem *) shmat(configs_key, NULL, 0);
-    if (configs == NULL) {
-        log_message("[Race Simulator] Failed to attach to configs shared memory");
-        exit(1);
-    } else log_message("[Race Simulator] Configs shared memory attached");
-}
-
-// Parse config file
-void read_conf(char* filename) {
-    FILE* config;
-    if ((config = fopen(filename, "r")) == NULL) {
-        log_message("[Race Simulator] Failed to open config file");
-        terminate(1);
+    if ((shm = shmat(shmid, NULL, 0)) == (void*) -1) {
+        log_message("[Race Simulator] Failed to attach shared memory segment");
+        return -1;
+    } log_message("[Race Simulator] Shared memory segment attached");
+    shm->teams = malloc(sizeof(Team*)*(configs.noTeams));
+    for (int i = 0; i < configs.noTeams; i++) {
+        (shm->teams[i])->cars = malloc(sizeof(Car)*(configs.maxCars));
     }
-
-        int in1, in2;
-    char buff[64], * token;
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        in1 = atoi(buff);
-        if (in1 <= 0) {
-            fprintf(stderr, "timeUnit null\n");
-            fclose(config);
-            return;
-        } else configs->timeUnit = in1;
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        token = strtok(buff, ", ");
-        in1 = atoi(token);
-        token = strtok(NULL, "\n");
-        in2 = atoi(token);
-        if (in1 <= 0) {
-            printf("lapDistance is not a positive integer\n");
-            fclose(config);
-            return;
-        } else if (in2 <= 0) {
-            printf("lapCount is not a positive integer\n");
-            fclose(config);
-            return;
-        } else {
-            configs->lapDistance = in1;
-            configs->lapCount = in2;
-        }
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        in1 = atoi(buff);
-        if (in1 < 3) {
-            printf("Not enough teams to setup a race, minimum is 3\n");
-            fclose(config);
-            return;
-        } else configs->noTeams = in1;
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        in1 = atoi(buff);
-        if (in1 <= 0) {
-            printf("maxCars is not a positive integer\n");
-            fclose(config);
-            return;
-        } else configs->maxCars = in1;
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        in1 = atoi(buff);
-        if (in1 <= 0) {
-            printf("tBreakdown is not a positive integer\n");
-            fclose(config);
-            return;
-        } else configs->tBreakdown = in1;
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        token = strtok(buff, ", ");
-        in1 = atoi(token);
-        token = strtok(NULL, "\n");
-        in2 = atoi(token);
-        if (in1 <= 0) {
-            printf("tBoxMin is not a positive integer\n");
-            fclose(config);
-            return;
-        } else if (in2 < in1) {
-            printf("tBoxMax is not greater than tBoxMin\n");
-            fclose(config);
-            return;
-        } else {
-            configs->tBoxMin = in1;
-            configs->tBoxMax = in2;
-        }
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file");
-        fclose(config);
-        return;
-    }
-
-    if (fgets(buff, sizeof(buff) - 1, config)) {
-        in1 = atoi(buff);
-        if (in1 <= 0) {
-            printf("capacity is not a positive integer\n");
-            fclose(config);
-            return;
-        } else configs->capacity = in1;
-        in1 = in2 = 0;
-    } else {
-        fprintf(stderr, "Invalid configuration file\n");
-        fclose(config);
-        return;
-    }
-
-    #if DEBUG
-        printf(">> timeUnit = %d\n", configs->timeUnit);
-        printf(">> lapDistance = %d\n", configs->lapDistance);
-        printf(">> lapCount = %d\n", configs->lapCount);
-        printf(">> noTeams = %d\n", configs->noTeams);
-        printf(">> maxCars = %d\n", configs->maxCars);
-        printf(">> tBreakdown = %d\n", configs->tBreakdown);
-        printf(">> tBoxMin = %d\n", configs->tBoxMin);
-        printf(">> tBoxMax = %d\n", configs->tBoxMax);
-        printf(">> capacity = %d\n", configs->capacity);
-    #endif
-
-    fclose(config);
-    log_message("[Race Simulator] Configuration read");
+    return 0;
 }
 
 /* ----- Named Pipe ----- */
@@ -313,12 +175,13 @@ void init_npipe() {
 /* ----- Message Queue ----- */
 
 void init_mq() {
-    if ((mq_id = msgget(IPC_PRIVATE, IPC_CREAT|0600)) == -1) {
+    if ((mqid = msgget(IPC_PRIVATE, IPC_CREAT|0600)) == -1) {
         log_message("[Race Simulator] Failed to create the message queue");
         terminate(1);
     }
 
     log_message("[Race Simulator] Created message queue");
+    msglen = sizeof(msg)-sizeof(long);
 }
 
 /* ----- Logging Functions -----*/
@@ -338,7 +201,10 @@ void log_message(char* message) {
     strftime(time_s, sizeof(time_s), "%H:%M:%S ", time_2);
 
     // Print and write to log file
+    sem_wait(mutex);
     fprintf(log_file, "%s %s\n", time_s, message);
     fflush(log_file);
     printf("%s %s\n", time_s, message);
+    fflush(stdout);
+    sem_post(mutex);
 }
