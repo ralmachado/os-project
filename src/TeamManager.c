@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/msg.h>
+
 #include "libs/SharedMem.h"
 #include "libs/MsgQueue.h"
 
@@ -31,7 +32,7 @@ void thread_exit() {
 }
 
 // I have no idea if any of the code I am writing here will even work...
-void race(Car *me, int id) {
+void race(Car *me) {
     // TODO Receive breakdown messages
     // msg ohno;
     // msgrcv(mqid, &ohno, msglen, *FIXME*, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
@@ -51,7 +52,7 @@ void race(Car *me, int id) {
         me->lowFuel = true;
     }
 
-    if (me->state == SAFETY && team->box == FREE) team->box == RESERVED;
+    if (me->state == SAFETY && team->box == FREE) team->box = RESERVED;
 
     switch (me->state) {
         case RACE:
@@ -66,8 +67,8 @@ void race(Car *me, int id) {
                     if (team->box == FREE) { 
                         me->position = 0;
                         me->state = BOX;
-                        team->box == OCCUPPIED;
-                        in_box = id;
+                        team->box = OCCUPPIED;
+                        in_box = me->number;
                         sem_post(&box_worker);
                         pthread_mutex_unlock(&box_state);
                         pthread_mutex_lock(&repair_mutex);
@@ -89,8 +90,8 @@ void race(Car *me, int id) {
                 if (team->box == RESERVED) {
                     me->position = 0;
                     me->state = BOX;
-                    team->box == OCCUPPIED;
-                    in_box = id;
+                    team->box = OCCUPPIED;
+                    in_box = me->number;
                     sem_post(&box_worker);
                     pthread_mutex_unlock(&box_state);
                     pthread_mutex_lock(&repair_mutex);
@@ -117,13 +118,8 @@ void* vroom(void* r_id) {
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", team->id, id);
     log_message(buff);
     Car *me = &(team->cars[id-1]);
-    // FIX delegate initialization to named pipe late
-    // me->fuel = configs.capacity;
-    // me->position = 0;
-    // snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", team->id, id);
-    // log_message(buff);
     sleep(2); // TODO Don't forget to get rid of this sleep
-    // Race function (race())
+    // Race function (race(me)
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
     
     log_message(buff);

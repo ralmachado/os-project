@@ -8,13 +8,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/select.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
+
 #include "libs/SharedMem.h"
 #include "libs/TeamManager.h"
 
@@ -146,21 +147,21 @@ void add_car(char *team_name, int car, int speed, int consumption, int reliabili
     team->cars[team->racers].stops = 0;
 
     snprintf(buff, sizeof(buff), 
-        "[Race Manager] New car => Team: %s, Speed: %d, Consumption: %d, Reliability: %d", 
+        "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %d, Reliability: %d", 
         team_name, car, speed, consumption, reliability);
 }
 
-void npipe_opts(char *opt, int size) {
+void npipe_opts(char *opt) {
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE!") == 0) {
         // TODO start race if not started yet, else complain!
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
         // TODO if race already started reject
         char *token = strtok_r(opt, "ADDCAR ", &opt);
-        char team[BUFFSIZE];
+        char team_name[BUFFSIZE];
         int car, speed, consumption, reliability;
         if ((token = strtok_r(opt, " ", &opt))) {
-            strncpy(team, token, sizeof(team));
+            strncpy(team_name, token, sizeof(team_name));
         }
         if ((token = strtok_r(opt, " ", &opt))) {
             if ((car = atoi(token)) <= 0) {
@@ -186,7 +187,7 @@ void npipe_opts(char *opt, int size) {
                 return;
             }
         }
-        add_car(team, car, speed, consumption, reliability);
+        add_car(team_name, car, speed, consumption, reliability);
     } else {
         snprintf(buff, sizeof(buff), "[Race Manager] Invalid command: %s", opt);
         log_message(buff);
@@ -203,11 +204,10 @@ void pipe_listener() {
         
         if (select(*(upipes+configs.noTeams), &read_set, NULL, NULL, NULL)) {
             if (FD_ISSET(fd_npipe, &read_set)) { 
-                // TODO Implement Named Pipe commands
                 nread = read(fd_npipe, buff, sizeof(buff));
                 if (nread > 0) {
                     buff[nread-1] = 0;
-                    npipe_opts(buff, sizeof(buff)); // todo Implementing this
+                    npipe_opts(buff); // TODO Test this
                 }
             }
             
