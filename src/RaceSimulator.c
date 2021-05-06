@@ -26,7 +26,6 @@
 #include "libs/MsgQueue.h"
 
 #define DEBUG 0
-#define BUFFSIZE 128
 #define PIPE_NAME "manager"
 
 FILE* log_file;

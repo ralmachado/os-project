@@ -14,24 +14,58 @@
 
 pthread_t* cars;
 sem_t* mutex;
-int racers = 0, teamId, * box;
+int racers = 0, * box;
 int pipe_fd;
+Team *team;
 
 extern void log_message();
+
+void race(Car *me, int id) {
+    if (me->fuel == 0 && !(me->state == QUIT)) {
+        me->state = QUIT;
+        // TODO Update team and make car stop race
+    }
+
+    if (me->state == RACE && (me->fuel) < 4*(me->consumption)*(configs.lapDistance)/(me->speed)) {
+        // TODO Try to get in box
+    }
+
+    if (me->state == RACE && (me->fuel) < 2*(me->consumption)*(configs.lapDistance)/(me->speed)) {
+        me->state = SAFETY;
+    }
+
+    switch (me->state) {
+        case RACE:
+            me->fuel -= me->consumption;
+            if (me->position + me->speed) me->laps += 1;
+            me->position += me->speed;
+            me->position %= configs.lapDistance;
+            break;
+        case SAFETY:
+            me->fuel -= 0.4*(me->consumption);
+            if (me->position + 0.3 * (me->speed)) me->laps += 1;
+            me->position += 0.3 * me->speed;
+            me->position %= configs.lapDistance;
+            break;
+    }
+    sleep(configs.timeUnit);
+}
 
 // Car threads live here
 void* vroom(void* r_id) {
     int id = *(int*)r_id;
     free(r_id);
     char buff[64];
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", teamId, id);
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", team->id, id);
     log_message(buff);
-    Car *me = &(shm->teams[teamId-1]->cars[id-1]);
+    Car *me = &(shm->teams[team->id-1]->cars[id-1]);
     me->fuel = configs.capacity;
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", teamId, id);
+    me->position = 0;
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car #%d topped up", team->id, id);
     log_message(buff);
-    sleep(2);
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", teamId, id);
+    sleep(2); // TODO Don't forget to get rid of this sleep
+    // Race function (race())
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
     
     log_message(buff);
 
@@ -57,7 +91,7 @@ void join_threads() {
     char buff[64];
     for (int i = 0; i < racers; i++) {
         pthread_join(cars[i], NULL);
-        snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Joined thread #%d", teamId, i + 1);
+        snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Joined thread #%d", team->id, i + 1);
         log_message(buff);
     }
 
@@ -66,14 +100,12 @@ void join_threads() {
 // Team Manager process lives here
 void team_execute() {
     char buff[64];
-    // snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Box state = %d", teamId, *box);
-    // log_message(buff);
     for (int i = 0; i < 2; i++)
         spawn_car();
 
     join_threads();
 
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", teamId);
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", team->id);
     log_message(buff);
     close(pipe_fd);
     exit(0);
@@ -82,16 +114,17 @@ void team_execute() {
 // Setup Team Manager
 void team_init(int id, int pipe) {
     pipe_fd = pipe;
-    teamId = id;
-    shm->teams[id-1]->id = id;
+    team = shm->teams[id-1];
+    team->id = id;
+    team->box = FREE;
     write(pipe_fd, "FUCK", strlen("FUCK")+1);
     char buff[128];
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", teamId);
+    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", team->id);
     log_message(buff);
     
     mutex = sem_open("MUTEX", 0);
     cars = malloc(sizeof(pthread_t) * configs.maxCars);
-    // box = shm->boxes + (teamId - 1);
+    // box = shm->boxes + (team->id - 1);
 
     team_execute();
 }

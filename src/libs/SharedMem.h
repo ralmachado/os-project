@@ -1,12 +1,17 @@
+#define BUFFSIZE 256
+
 typedef struct {
     int timeUnit, lapDistance, lapCount, noTeams, maxCars, tBreakdown, tBoxMin, tBoxMax, capacity;
 } Config;
 
 typedef struct {
     short int state;
+    int speed;
+    int consumption;
+    int reliability;
+    int fuel;
     int position;
     int laps;
-    int fuel;
     int stops;
     int malfunctions;
     int topup;
@@ -14,11 +19,12 @@ typedef struct {
 
 typedef struct {
     int id;
-    Car* cars;
+    int racers;
+    int box;
+    Car *cars;
 } Team;
 
 typedef struct {
-    int *boxes;
     Team **teams;
 } Sharedmem;
 
