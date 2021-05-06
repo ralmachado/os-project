@@ -1,1 +1,1 @@
-extern void team_init(int teamId);
+extern void team_init(int teamId, int pipe);

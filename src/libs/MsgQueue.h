@@ -6,4 +6,5 @@ typedef struct {
     char *test;
 } msg;
 
-int mq_id;
+int mqid;
+int msglen;

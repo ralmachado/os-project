@@ -7,6 +7,9 @@ RaceSimulator
 log.txt
 test*
 
+# Compilation artifacts
+*.o
+
 # Tasks
 TODO
 *.todo
