@@ -1,13 +1,11 @@
 /* ----- Message Queue ----- */
 
-#ifndef BUFFSIZE
-#define BUFFSIZE 256
-#endif
+#define MSGSIZE 64
 
 typedef struct {
     long msgtype;
     // TODO define message struct
-    char message[BUFFSIZE];
+    char message[MSGSIZE];
 } msg;
 
 int mqid;

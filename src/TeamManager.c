@@ -16,8 +16,8 @@
 #include "libs/MsgQueue.h"
 
 pthread_t* cars, box_t;
-pthread_mutex_t box_state = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t repair_cv = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t box_state = PTHREAD_MUTEX_INITIALIZER, *race_mutex;
+pthread_cond_t repair_cv = PTHREAD_COND_INITIALIZER, *race_cv;
 pthread_mutex_t repair_mutex= PTHREAD_MUTEX_INITIALIZER;
 sem_t box_worker;
 int racers = 0, * box;
@@ -117,8 +117,19 @@ void* vroom(void* r_id) {
     Car *me = &(team->cars[id-1]);
     sleep(2); // TODO Don't forget to get rid of this sleep
     // Race function (race(me)
+    
+    if (me->number == -1) pthread_exit(0);
+    else {
+        pthread_mutex_lock(race_mutex);
+        while (shm->race_status == false)
+            pthread_cond_wait(race_cv, race_mutex);
+        pthread_mutex_unlock(race_mutex);
+        race(me);
+    }
+    
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
     log_message(buff);
+    
 
     pthread_exit(0);
 }
@@ -247,8 +258,10 @@ void team_execute() {
     char buff[BUFFSIZE];
     for (int i = 0; i < 2; i++)
         spawn_car();
+    
     /*
-    for (int i = 0; i < team->racers; i++) {
+    // TODO Criar maxCars threads -> descartar aquelas com car->number == -1 quando a corrida inicia
+    for (int i = 0; i < configs.maxCars; i++) {
         spawn_car();
     }
     */
@@ -279,6 +292,8 @@ void team_init(int id, int pipe) {
     team = &(shm->teams[id-1]);
     team->id = id;
     team->box = FREE;
+    race_mutex = &(shm->race_mutex);
+    race_cv = &(shm->race_cv);
     write(pipe_fd, "FUCK", strlen("FUCK")+1);
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", team->id);

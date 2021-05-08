@@ -44,6 +44,9 @@ typedef struct shared_struct {
     int topup;
     int pos;
     Team *teams; // This is another shared memory
+    pthread_cond_t race_cv;
+    pthread_mutex_t race_mutex;
+    short int race_status;
 } Sharedmem;
 
 enum Box{FREE, RESERVED, OCCUPPIED};
