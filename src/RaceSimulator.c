@@ -30,6 +30,7 @@
 
 FILE* log_file;
 sem_t* mutex;
+int *shmids;
 
 void get_statistics();
 void init_log();
@@ -45,7 +46,6 @@ void wait_childs();
 
 void sigint() {
   signal(SIGINT, SIG_IGN);
-  puts("");
   terminate(1);
 }
 
@@ -58,6 +58,7 @@ void test_mq() {
 
 int main(void) {
     struct sigaction interrupt, statistics;
+    sigaddset(&block, SIGUSR1);
     interrupt.sa_handler = sigint;
     statistics.sa_handler = get_statistics;
     sigemptyset(&statistics.sa_mask);
@@ -70,11 +71,11 @@ int main(void) {
     init_log();
     log_message("[Race Simulator] Hello");
 
+    read_conf("config.txt");
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
 
-    read_conf("config.txt");
 
     // Temp fix
     signal(SIGINT, SIG_IGN);
@@ -83,6 +84,7 @@ int main(void) {
     // Temp fix
     signal(SIGINT, sigint);
     sigaction(SIGTSTP, &statistics, NULL);
+    sigprocmask(SIG_BLOCK, &block, NULL);
 
     while(wait(NULL) != -1);
 
@@ -110,7 +112,9 @@ void wait_childs() {
 void terminate(int code) {
     while (wait(NULL) != -1);
     if (shm) {
-        if (shm->teams) free(shm->teams);
+        for (int i = configs.noTeams+1; i >= 0; i--)
+            shmctl(shmids[i], IPC_RMID, NULL);
+        // if (shm->teams) free(shm->teams);
         if (shmctl(shmid, IPC_RMID, NULL) == -1)
             log_message("[Race Simulator] Shared memory couldn't be destroyed");
         else log_message("[Race Simulator] Shared memory destroyed");
@@ -149,7 +153,8 @@ int init_sem() {
 /* ----- Shared Memory Initialization (Configs) ----- */
 
 int init_shm() {
-    shmid = shmget(IPC_PRIVATE, sizeof(shm), IPC_EXCL|IPC_CREAT|0766);
+    shmids = calloc(2+configs.noTeams, sizeof(int));
+    shmid = shmget(IPC_PRIVATE, sizeof(shm), IPC_CREAT|0700);
     if (shmid == -1) {
         log_message("[Race Simulator] Failed to get shared memory key");
         return -1;
@@ -160,10 +165,23 @@ int init_shm() {
         return -1;
     } log_message("[Race Simulator] Shared memory segment attached");
     
-    shm->teams = malloc(sizeof(Team)*(configs.noTeams));
-    for (int i = 0; i < configs.noTeams; i++) {
-        shm->teams[i].init = false;
-        shm->teams[i].cars = malloc(sizeof(Car)*(configs.maxCars));
+    shmids[0] = shmget(IPC_PRIVATE, configs.noTeams*sizeof(Team),IPC_CREAT|0700);
+    if (shmids[0] != -1) {
+        log_message("[Race Simulator] Teams array created");
+        shm->teams = shmat(shmids[0], NULL, 0);
+        if (shm->teams) log_message("[Race Simulator] Teams array attached");
+
+        for (int i = 0; i < configs.noTeams; i++) {
+            Team *team = &(shm->teams[i]);
+            team->init = false;
+            shmids[i+1] = shmget(IPC_PRIVATE, configs.maxCars*sizeof(Car), IPC_CREAT|0700);
+            team->cars = shmat(shmids[i+1], NULL, 0);
+            if (team->cars == NULL) log_message("Failed to allocate space for cars");
+            else {
+                for (int j = 0; j < configs.maxCars; j++)
+                    team->cars[i].number = -1;
+            }
+        }
     }
 
     return 0;
@@ -219,5 +237,5 @@ void log_message(char* message) {
 
 void get_statistics() {
     // TODO Implement statistics
-    puts("HAHAHA GET FUCKED NERD");
+    // kill(0, SIGUSR1); // Sends SIGUSR1 to all processes and threads to suspend race
 }
