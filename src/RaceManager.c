@@ -28,12 +28,9 @@ extern void init_proc();
 int fd_npipe = -1;
 int *upipes = NULL;
 fd_set read_set;
-pid_t *childs;
 
 void manager_term(int code) {
     while (wait(NULL) != -1);
-
-    if (childs) free(childs);
 
     if (fd_npipe != -1) {
         if (close(fd_npipe)) log_message("[Race Manager] Failed to close named pipe");
@@ -51,7 +48,6 @@ void manager_term(int code) {
 void manager_int(int signum) {
     if (signum == SIGINT) {
         signal(SIGINT, SIG_IGN);
-        for (int i = 0; i < configs.noTeams; kill(*(childs+i), SIGINT), i++); 
         log_message("[Race Manager] Received SIGINT");
         manager_term(0);
     }
@@ -75,7 +71,7 @@ void spawn_teams() {
             log_message("[Race Manager] Failed to open unnamed pipe");
             manager_term(1);
         }
-        if ((*(childs+i) = fork()) == 0) {
+        if (fork() == 0) {
             // Tenho os fd dos pipes em shared memory, mas uma alternativa seria guardar num malloc
             // e passar por argumento para o novo processo?
             close(fd[0]);
@@ -306,7 +302,6 @@ void race_manager() {
     log_message("[Race Manager] Process spawned");
     if (store_unnamed()) manager_term(1);
     if (open_npipe()) manager_term(1);
-    childs = calloc(configs.noTeams, sizeof(pid_t));
     spawn_teams();
     // test_pipes();
     pipe_listener();

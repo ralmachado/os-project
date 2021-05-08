@@ -50,6 +50,5 @@ enum Box{FREE, RESERVED, OCCUPPIED};
 enum State{RACE, SAFETY, BOX, QUIT, FINISH};
 
 Config configs;
-Sharedmem *shm;
 int shmid;
-sigset_t block;
+Sharedmem *shm;

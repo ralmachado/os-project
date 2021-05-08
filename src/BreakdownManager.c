@@ -29,7 +29,7 @@ void get_msg() {
     msg my_msg;
     msgrcv(mqid, &my_msg, msglen, 0, 0);
     char buff[128];
-    snprintf(buff, sizeof(buff), "[Breakdown Manager] Message: %s", my_msg.test);
+    snprintf(buff, sizeof(buff), "[Breakdown Manager] Message: %s", my_msg.message);
     log_message(buff);
 }
 
