@@ -4,6 +4,7 @@
 // Race Manager process functions
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +29,8 @@ extern void init_proc();
 int fd_npipe = -1;
 int *upipes = NULL;
 fd_set read_set;
+pthread_mutex_t *race_mutex;
+pthread_cond_t *race_cv;
 
 void manager_term(int code) {
     while (wait(NULL) != -1);
@@ -41,6 +44,15 @@ void manager_term(int code) {
         free(upipes); 
         log_message("[Race Manager] Closed unnamed pipes");
     }
+
+    if (pthread_mutex_destroy(race_mutex))
+        log_message("[Race Manager] Failed to destroy 'race_mutex'");
+    else log_message("[Race Manager] Destroyed 'race_mutex'");
+    
+    if (pthread_cond_destroy(race_cv))
+        log_message("[Race Manager] Failed to destroy 'race_cv'");
+    else log_message("[Race Manager] Destroyed 'race_cv'");
+    
     log_message("[Race Manager] Process exiting");
     exit(code);
 }
@@ -161,9 +173,6 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
     }
 
     Car *new_car = &(team->cars[(team->racers)++]);
-    // if (new_car == NULL) puts("NULL");
-    // else puts("OKAY");
-    // puts("ALIVE");
     new_car->number = car;
     new_car->speed = speed;
     new_car->reliability = reliability;
@@ -185,6 +194,10 @@ void npipe_opts(char *opt) {
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE!") == 0) {
         // TODO start race if not started yet, else complain!
+        if (shm->race_status == false) {
+            shm->race_status = true;
+            pthread_cond_broadcast(&(shm->race_cv));
+        }
         log_message("[Race Manager] Received START RACE! command");
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
         log_message("[Race Manager] Received ADDCAR command");
@@ -259,7 +272,8 @@ void pipe_listener() {
         // for (i = 0; i < configs.noTeams; i++)
         //     FD_SET(upipes[i], &read_set);
 
-        if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
+        // if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
+        if (select(fd_npipe+1, &read_set, NULL, NULL, NULL) > 0) {
             if (FD_ISSET(fd_npipe, &read_set)) {
                 log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
                 do {
@@ -287,8 +301,8 @@ void pipe_listener() {
                     } while (nread > 0);
                 }
             }
-        }
-    }
+        } // if (select() > 0)
+    } // while(1)
 }
 
 // Race Manager process lives here
@@ -302,6 +316,18 @@ void race_manager() {
     log_message("[Race Manager] Process spawned");
     if (store_unnamed()) manager_term(1);
     if (open_npipe()) manager_term(1);
+    shm->race_status = false;
+    race_mutex = &(shm->race_mutex);
+    race_cv = &(shm->race_cv);
+    pthread_condattr_t shared_cv;
+    pthread_mutexattr_t shared_mutex;
+    pthread_condattr_init(&shared_cv);
+    pthread_mutexattr_init(&shared_mutex);
+    pthread_condattr_setpshared(&shared_cv, PTHREAD_PROCESS_SHARED);
+    pthread_mutexattr_setpshared(&shared_mutex, PTHREAD_PROCESS_SHARED);
+    pthread_cond_init(race_cv, &shared_cv);
+    pthread_mutex_init(race_mutex, &shared_mutex);
+
     spawn_teams();
     // test_pipes();
     pipe_listener();
