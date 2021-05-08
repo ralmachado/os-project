@@ -1,4 +1,5 @@
 #define BUFFSIZE 256
+#define NAMESIZE 16
 #define true 1
 #define false 0
 
@@ -34,15 +35,15 @@ typedef struct team_struct {
     short int box; // Team's box state
     int racers; // Total racers
     int id; // TODO Replace all instances of id with name
-    char name[BUFFSIZE];
-    Car *cars;
+    char name[NAMESIZE];
+    Car *cars; // This is yet another shared memory
 } Team;
 
 typedef struct shared_struct {
     int malfunctions;
     int topup;
     int pos;
-    Team *teams;
+    Team *teams; // This is another shared memory
 } Sharedmem;
 
 enum Box{FREE, RESERVED, OCCUPPIED};
@@ -51,3 +52,4 @@ enum State{RACE, SAFETY, BOX, QUIT, FINISH};
 Config configs;
 Sharedmem *shm;
 int shmid;
+sigset_t block;

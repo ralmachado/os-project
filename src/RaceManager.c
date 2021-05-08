@@ -28,17 +28,33 @@ extern void init_proc();
 int fd_npipe = -1;
 int *upipes = NULL;
 fd_set read_set;
+pid_t *childs;
 
 void manager_term(int code) {
     while (wait(NULL) != -1);
-    if (fd_npipe != -1) close(fd_npipe);
-    if (upipes) free(upipes);
+
+    if (childs) free(childs);
+
+    if (fd_npipe != -1) {
+        if (close(fd_npipe)) log_message("[Race Manager] Failed to close named pipe");
+        else log_message("[Race Manager] Closed named pipe");
+    }
+    if (upipes) {
+        for (int i = 0; i < configs.noTeams; i++) close(*(upipes+i));
+        free(upipes); 
+        log_message("[Race Manager] Closed unnamed pipes");
+    }
     log_message("[Race Manager] Process exiting");
     exit(code);
 }
 
 void manager_int(int signum) {
-    if (signum == SIGINT) manager_term(0);
+    if (signum == SIGINT) {
+        signal(SIGINT, SIG_IGN);
+        for (int i = 0; i < configs.noTeams; kill(*(childs+i), SIGINT), i++); 
+        log_message("[Race Manager] Received SIGINT");
+        manager_term(0);
+    }
 }
 
 int store_unnamed() {
@@ -59,11 +75,12 @@ void spawn_teams() {
             log_message("[Race Manager] Failed to open unnamed pipe");
             manager_term(1);
         }
-        if (fork() == 0) {
+        if ((*(childs+i) = fork()) == 0) {
             // Tenho os fd dos pipes em shared memory, mas uma alternativa seria guardar num malloc
             // e passar por argumento para o novo processo?
             close(fd[0]);
             team_init(i+1, fd[1]);
+            printf("I got here");
         }
         close(fd[1]);
         *(upipes+i) = fd[0];
@@ -117,7 +134,14 @@ Team* find_team(char *team_name) {
     return NULL;
 }
 
-void add_car(char *team_name, int car, int speed, int consumption, int reliability) {
+void print(int signo) {
+    if (signo == SIGSEGV)
+        puts("You done fucked up");
+    manager_term(1);
+}
+
+void add_car(char *team_name, int car, int speed, double consumption, int reliability) {
+    signal(SIGSEGV, print);
     char buff[BUFFSIZE];
     Team *team;
     if (!(team = find_team(team_name))) {
@@ -125,6 +149,7 @@ void add_car(char *team_name, int car, int speed, int consumption, int reliabili
         log_message(buff);
         return;
     }
+
     for (int i = 0; i < team->racers; i++) {
         if (team->cars[i].number == car) {
             snprintf(buff, sizeof(buff), "[Race Manager] Team %s already has car %d", team_name, car);
@@ -132,60 +157,93 @@ void add_car(char *team_name, int car, int speed, int consumption, int reliabili
             return;
         }
     }
+
     if (team->racers == configs.maxCars) {
         snprintf(buff, sizeof(buff), "[Race Manager] Team %s is already full", team_name);
         log_message(buff);
         return;
     }
 
-    team->cars[++(team->racers)].speed = speed;
-    team->cars[team->racers].reliability = reliability;
-    team->cars[team->racers].fuel = configs.capacity;
-    team->cars[team->racers].lowFuel = false;
-    team->cars[team->racers].malfunction = false;
-    team->cars[team->racers].position = 0;
-    team->cars[team->racers].stops = 0;
+    Car *new_car = &(team->cars[(team->racers)++]);
+    // if (new_car == NULL) puts("NULL");
+    // else puts("OKAY");
+    // puts("ALIVE");
+    new_car->number = car;
+    new_car->speed = speed;
+    new_car->reliability = reliability;
+    new_car->consumption = consumption;
+    new_car->fuel = configs.capacity;
+    new_car->lowFuel = false;
+    new_car->malfunction = false;
+    new_car->position = 0;
+    new_car->stops = 0;
 
     snprintf(buff, sizeof(buff), 
-        "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %d, Reliability: %d", 
-        team_name, car, speed, consumption, reliability);
+        "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %.2f, Reliability: %d", 
+        team->name, new_car->number, new_car->speed, new_car->consumption, new_car->reliability);
+    log_message(buff);
 }
 
 void npipe_opts(char *opt) {
+    char *saveptr;
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE!") == 0) {
         // TODO start race if not started yet, else complain!
+        log_message("[Race Manager] Received START RACE! command");
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
+        log_message("[Race Manager] Received ADDCAR command");
         // TODO if race already started reject
-        char *token = strtok_r(opt, "ADDCAR ", &opt);
+        // printf("opt = %s\n", opt);
+        char *token = strtok_r(opt+7, " ", &saveptr);
         char team_name[BUFFSIZE];
-        int car, speed, consumption, reliability;
-        if ((token = strtok_r(opt, " ", &opt))) {
+        int car, speed, reliability;
+        double consumption;
+        if (token) {
             strncpy(team_name, token, sizeof(team_name));
+            // printf("token = %s\n", token);
+        }  else {
+            log_message("[Race Manager] Invalid car configuration received (missing args)");
+            return;
         }
-        if ((token = strtok_r(opt, " ", &opt))) {
+        if ((token = strtok_r(NULL, " ", &saveptr))) {
             if ((car = atoi(token)) <= 0) {
-                log_message("[Race Manager] Invalid car configuration received");
+                log_message("[Race Manager] Invalid car configuration received (car no.)");
                 return;
             }
+            // printf("token = %s | car = %d\n", token, car);
+        } else {
+            log_message("[Race Manager] Invalid car configuration received (missing args)");
+            return;
         }
-        if ((token = strtok_r(opt, " ", &opt))) {
+        if ((token = strtok_r(NULL, " ", &saveptr))) {
             if ((speed = atoi(token)) <= 0) {
-                log_message("[Race Manager] Invalid car configuration received");
+                log_message("[Race Manager] Invalid car configuration received (speed)");
                 return;
             }
+            // printf("token = %s | speed = %d\n", token, speed);
+        } else {
+            log_message("[Race Manager] Invalid car configuration received (missing args)");
+            return;
         }
-        if ((token = strtok_r(opt, " ", &opt))) {
-            if ((consumption = atoi(token)) <= 0) {
-                log_message("[Race Manager] Invalid car configuration received");
+        if ((token = strtok_r(NULL, " ", &saveptr))) {
+            if ((consumption = atof(token)) <= 0) {
+                log_message("[Race Manager] Invalid car configuration received (consumption)");
                 return;
             }
+            // printf("token = %s | consumption = %.2f\n", token, consumption);
+        } else {
+            log_message("[Race Manager] Invalid car configuration received (missing args)");
+            return;
         }
-        if ((token = strtok_r(opt, " ", &opt))) {
+        if ((token = strtok_r(NULL, " ", &saveptr))) {
             if ((reliability = atoi(token)) <= 0) {
-                log_message("[Race Manager] Invalid car configuration received");
+                log_message("[Race Manager] Invalid car configuration received (reliability)");
                 return;
             }
+            // printf("token = %s | reliability = %d\n", token, reliability);
+        } else {
+            log_message("[Race Manager] Invalid car configuration received (missing args)");
+            return;
         }
         add_car(team_name, car, speed, consumption, reliability);
     } else {
@@ -195,30 +253,42 @@ void npipe_opts(char *opt) {
 }
 
 void pipe_listener() {
+    log_message("[Race Manager] Listening on all pipes");
     int i, nread;
     char buff[BUFFSIZE];
     while (1) {
         FD_ZERO(&read_set);
-        for (i = 0; i < configs.noTeams; i++)
-            FD_SET(*(upipes+i), &read_set);
-        
-        if (select(*(upipes+configs.noTeams), &read_set, NULL, NULL, NULL)) {
-            if (FD_ISSET(fd_npipe, &read_set)) { 
-                nread = read(fd_npipe, buff, sizeof(buff));
-                if (nread > 0) {
-                    buff[nread-1] = 0;
-                    npipe_opts(buff); // TODO Test this
-                }
+        puts("Zeroed out");
+        FD_SET(fd_npipe, &read_set);
+        // for (i = 0; i < configs.noTeams; i++)
+        //     FD_SET(upipes[i], &read_set);
+
+        if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
+            if (FD_ISSET(fd_npipe, &read_set)) {
+                log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
+                do {
+                    nread = read(fd_npipe, buff, sizeof(buff));
+                    if (nread > 0) {
+                        buff[nread-1] = 0;
+                        npipe_opts(buff);
+                    }
+                } while (nread > 0);
+                close(fd_npipe);
+                open(PIPE_NAME, O_RDWR);
             }
             
             for (i = 0; i < configs.noTeams; i++) {
                 if (FD_ISSET(*(upipes+i), &read_set)) {
                     // TODO Get updates from Teams 
-                    nread = read(fd_npipe, buff, sizeof(buff));
-                    if (nread > 0) {
-                        buff[nread-1] = 0;
-                        // TODO Figure out what the updates do?
-                    }
+                    log_message("[Race Manager] Activity on unnamed pipe");
+                    do {
+                        nread = read(*(upipes+i), buff, sizeof(buff));
+                        if (nread > 0) {
+                            buff[nread-1] = 0;
+                            log_message(buff);
+                            // TODO Figure out what the updates do?
+                        }
+                    } while (nread > 0);
                 }
             }
         }
@@ -230,15 +300,15 @@ void race_manager() {
     struct sigaction sigint;
     sigint.sa_handler = manager_int;
     sigemptyset(&sigint.sa_mask);
-    sigaddset(&sigint.sa_mask, SIGTSTP);
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
 
     log_message("[Race Manager] Process spawned");
-    if (open_npipe()) manager_term(1);
     if (store_unnamed()) manager_term(1);
+    if (open_npipe()) manager_term(1);
+    childs = calloc(configs.noTeams, sizeof(pid_t));
     spawn_teams();
-    test_pipes();
-    // pipe_listener();
+    // test_pipes();
+    pipe_listener();
     manager_term(0);
 }
