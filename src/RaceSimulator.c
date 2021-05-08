@@ -28,9 +28,10 @@
 #define DEBUG 0
 #define PIPE_NAME "manager"
 
+int *shmids;
 FILE* log_file;
 sem_t* mutex;
-int *shmids;
+sigset_t block;
 
 void get_statistics();
 void init_log();
@@ -52,7 +53,6 @@ void sigint() {
 void test_mq() {
     msg my_msg;
     my_msg.msgtype = 1;
-    my_msg.test = "This is a test";
     msgsnd(mqid, &my_msg, msglen, 0);
 }
 
