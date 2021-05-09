@@ -30,8 +30,14 @@ extern void log_message();
 // I have no idea if any of the code I am writing here will even work...
 void race(Car *me) {
     // TODO Receive breakdown messages
-    // msg ohno;
-    // msgrcv(mqid, &ohno, msglen, *FIXME*, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
+    msg ohno;
+    int msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
+    if (msgsize == msglen) {
+        me->state = SAFETY;
+        pthread_mutex_lock(&box_state);
+        if (team->box == FREE) team->box = RESERVED;
+        pthread_mutex_unlock(&box_state);
+    }
 
     if (me->fuel == 0 && !(me->state == QUIT)) {
         me->state = QUIT;
@@ -48,7 +54,9 @@ void race(Car *me) {
         me->lowFuel = true;
     }
 
+    pthread_mutex_lock(&box_state);
     if (me->state == SAFETY && team->box == FREE) team->box = RESERVED;
+    pthread_mutex_unlock(&box_state);
 
     switch (me->state) {
         case RACE:
