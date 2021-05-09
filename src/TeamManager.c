@@ -29,9 +29,9 @@ extern void log_message();
 
 // I have no idea if any of the code I am writing here will even work...
 void race(Car *me) {
-    // TODO Receive breakdown messages
+    // Receive breakdown messages
     msg ohno;
-    int msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
+    size_t msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
     if (msgsize == msglen) {
         me->state = SAFETY;
         pthread_mutex_lock(&box_state);
@@ -123,13 +123,14 @@ void* vroom(void* r_id) {
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", team->id, id);
     log_message(buff);
     Car *me = &(team->cars[id-1]);
-    sleep(2); // TODO Don't forget to get rid of this sleep
-    // Race function (race(me))
-
+    
+    // Wait for race start
     pthread_mutex_lock(race_mutex);
     while (shm->race_status == false) 
         pthread_cond_wait(&(shm->race_cv), &(shm->race_mutex));
     pthread_mutex_unlock(race_mutex);
+    // If car has not been initialized: exit
+    // Else race!
     if (me->number == -1) pthread_exit(0);
     else race(me);
     
@@ -273,7 +274,8 @@ void team_execute() {
         spawn_car();
     
     /*
-    // TODO Criar maxCars threads -> descartar aquelas com car->number == -1 quando a corrida inicia
+    // TODO Habilitar todas as threads quando seguro
+    // Criar maxCars threads -> descartar aquelas com car->number == -1 quando a corrida inicia
     for (int i = 0; i < configs.maxCars; i++) {
         spawn_car();
     }
@@ -298,7 +300,10 @@ void team_init(int id, int pipe) {
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
 
-    pipe_fd = pipe;
+    if (pipe != -1) {
+        printf("Pipe open [%d]\n", pipe);
+        pipe_fd = pipe;
+    }
     team = &(shm->teams[id-1]);
     team->id = id;
     team->box = FREE;
