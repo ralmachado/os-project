@@ -20,7 +20,7 @@ pthread_mutex_t box_state = PTHREAD_MUTEX_INITIALIZER, *race_mutex;
 pthread_cond_t repair_cv = PTHREAD_COND_INITIALIZER, *race_cv;
 pthread_mutex_t repair_mutex= PTHREAD_MUTEX_INITIALIZER;
 sem_t box_worker;
-int racers = 0, * box;
+int racers = 0, * box, *ids;
 int pipe_fd;
 int in_box = -1;
 Team *team;
@@ -116,21 +116,18 @@ void* vroom(void* r_id) {
     log_message(buff);
     Car *me = &(team->cars[id-1]);
     sleep(2); // TODO Don't forget to get rid of this sleep
-    // Race function (race(me)
-    
+    // Race function (race(me))
+
+    pthread_mutex_lock(race_mutex);
+    while (shm->race_status == false) 
+        pthread_cond_wait(&(shm->race_cv), &(shm->race_mutex));
+    pthread_mutex_unlock(race_mutex);
     if (me->number == -1) pthread_exit(0);
-    else {
-        pthread_mutex_lock(race_mutex);
-        while (shm->race_status == false)
-            pthread_cond_wait(race_cv, race_mutex);
-        pthread_mutex_unlock(race_mutex);
-        race(me);
-    }
+    else race(me);
     
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
     log_message(buff);
     
-
     pthread_exit(0);
 }
 
@@ -183,14 +180,20 @@ void join_threads() {
         snprintf(buff, sizeof(buff), "[Team Manager #%d] Failed to cancel Box thread", team->id);
     else snprintf(buff, sizeof(buff), "[Team Manager #%d] Cancelled Box thread", team->id);
     log_message(buff);
+    if (pthread_join(box_t, NULL))
+        snprintf(buff, sizeof(buff), "[Team Manager #%d Failed to join Box thread", team->id);
+    else snprintf(buff, sizeof(buff), "[Team Manager #%d] Joined Box thread", team->id);
+    log_message(buff);
     for (int i = 0; i < racers; i++) {
-        pthread_join(cars[i], NULL);
-        snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Joined thread #%d", team->id, i + 1);
+        if (pthread_cancel(cars[i]))
+            snprintf(buff, sizeof(buff), "[Team Manager #%d] Failed to cancel thread #%d", team->id, i + 1);
+        else snprintf(buff, sizeof(buff), "[Team Manager #%d] Cancelled thread #%d", team->id, i + 1);
+        log_message(buff);
+        if (pthread_join(cars[i], NULL))
+            snprintf(buff, sizeof(buff), "[Team Manager #%d] Failed to join thread #%d", team->id, i + 1);
+        else snprintf(buff, sizeof(buff), "[Team Manager #%d] Joined thread #%d", team->id, i + 1);
         log_message(buff);
     }
-    pthread_join(box_t, NULL);
-    snprintf(buff, sizeof(buff), "[Team Manager #%d] Joined Box thread", team->id);
-    log_message(buff);
 }
 
 void team_destroy() {
@@ -243,11 +246,14 @@ void team_destroy() {
 }
 
 void team_exit(int signo) {
-    fflush(stdout);
     char buff[BUFFSIZE];
+    signal(SIGINT, SIG_IGN);
     if (signo == SIGINT) {
+        snprintf(buff, sizeof(buff), "[Team Manager #%d] Received SIGINT", team->id);
+        log_message(buff);
+        join_threads();
         team_destroy();
-        snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", team->id);
+        snprintf(buff, sizeof(buff), "[Team Manager #%d] Process exiting", team->id);
         log_message(buff);
     }
     exit(0);
@@ -255,8 +261,7 @@ void team_exit(int signo) {
 
 // Team Manager process lives here
 void team_execute() {
-    char buff[BUFFSIZE];
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 1; i++)
         spawn_car();
     
     /*
@@ -268,9 +273,6 @@ void team_execute() {
 
     pthread_create(&box_t, NULL, car_box, NULL);
     sleep(2);
-    snprintf(buff, sizeof(buff), "[Team Manager #%d] Box closed", team->id);
-    log_message(buff);
-    join_threads();
     pause();
 
     // team_destroy();
@@ -281,7 +283,7 @@ void team_execute() {
 
 // Setup Team Manager
 void team_init(int id, int pipe) {
-    printf("Team #%d | pid: %d\n", id, getpid());
+    // printf("Team #%d | pid: %d\n", id, getpid());
     struct sigaction sigint;    
     sigint.sa_handler = team_exit;
     sigemptyset(&sigint.sa_mask);

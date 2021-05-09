@@ -45,7 +45,7 @@ void manager_term(int code) {
         log_message("[Race Manager] Closed unnamed pipes");
     }
 
-    if (pthread_mutex_destroy(race_mutex))
+    if (pthread_mutex_destroy(&(shm->race_mutex)))
         log_message("[Race Manager] Failed to destroy 'race_mutex'");
     else log_message("[Race Manager] Destroyed 'race_mutex'");
     
@@ -59,8 +59,6 @@ void manager_term(int code) {
 
 void manager_int(int signum) {
     if (signum == SIGINT) {
-        signal(SIGINT, SIG_IGN);
-        log_message("[Race Manager] Received SIGINT");
         manager_term(0);
     }
 }
@@ -77,8 +75,8 @@ int store_unnamed() {
 
 // Create Team Manager processes
 void spawn_teams() {
+    int fd[2];
     for (int i = 0; i < configs.noTeams; i++) {
-        int fd[2];
         if (pipe(fd)) {
             log_message("[Race Manager] Failed to open unnamed pipe");
             manager_term(1);
@@ -88,7 +86,6 @@ void spawn_teams() {
             // e passar por argumento para o novo processo?
             close(fd[0]);
             team_init(i+1, fd[1]);
-            printf("I got here");
         }
         close(fd[1]);
         *(upipes+i) = fd[0];
@@ -192,16 +189,20 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
 void npipe_opts(char *opt) {
     char *saveptr;
     char buff[BUFFSIZE];
-    if (strcmp(opt, "START RACE!") == 0) {
+    if (strcmp(opt, "START RACE") == 0) {
         // TODO start race if not started yet, else complain!
         if (shm->race_status == false) {
             shm->race_status = true;
             pthread_cond_broadcast(&(shm->race_cv));
         }
-        log_message("[Race Manager] Received START RACE! command");
+        log_message("[Race Manager] Received START RACE command");
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
         log_message("[Race Manager] Received ADDCAR command");
         // TODO if race already started reject
+        if (shm->race_status == true) {
+            log_message("[Race Manager] Cannot add car: race already started");
+            return;
+        }
         // printf("opt = %s\n", opt);
         char *token = strtok_r(opt+7, " ", &saveptr);
         char team_name[BUFFSIZE];
@@ -325,8 +326,14 @@ void race_manager() {
     pthread_mutexattr_init(&shared_mutex);
     pthread_condattr_setpshared(&shared_cv, PTHREAD_PROCESS_SHARED);
     pthread_mutexattr_setpshared(&shared_mutex, PTHREAD_PROCESS_SHARED);
-    pthread_cond_init(race_cv, &shared_cv);
-    pthread_mutex_init(race_mutex, &shared_mutex);
+    pthread_mutexattr_setrobust(&shared_mutex, PTHREAD_MUTEX_ROBUST);
+    if (pthread_cond_init(race_cv, &shared_cv))
+        log_message("[Race Manager] Failed to initialize 'race_cv'");
+    else log_message("[Race Manager] Initialized 'race_cv'");
+
+    if (pthread_mutex_init(race_mutex, &shared_mutex))
+        log_message("[Race Manager] Failed to initialize 'race_mutex'");
+    else log_message("[Race Manager] Initialized 'race_mutex'");
 
     spawn_teams();
     // test_pipes();
