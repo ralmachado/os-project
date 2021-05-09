@@ -41,7 +41,7 @@ void init_proc(void (*function)(), void* arg);
 int init_sem();
 int init_shm();
 void log_message(char* message);
-extern void read_conf(char* filename);
+extern int read_conf(char* filename);
 void terminate(int code);
 void wait_childs();
 
@@ -71,7 +71,7 @@ int main(void) {
     init_log();
     log_message("[Race Simulator] Hello");
 
-    read_conf("config.txt");
+    if (read_conf("config.txt")) terminate(1);
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
@@ -214,7 +214,7 @@ void init_mq() {
 
 void init_log() {
     if ((log_file = fopen("log.txt", "w+")) == NULL) {
-        log_message("[Race Simulator] Failed to open log file");
+        puts("[Race Simulator] Failed to open log file");
         exit(1);
     }
 }
