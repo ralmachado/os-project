@@ -139,14 +139,21 @@ Team* find_team(char *team_name) {
     return NULL;
 }
 
-void print(int signo) {
-    if (signo == SIGSEGV)
-        puts("You done fucked up");
-    manager_term(1);
+int find_car(int car_no) {
+    int i, j;
+    Team* team;
+    Car* cars;
+    for (i = 0; i < configs.noTeams; i++) {
+        team = &(shm->teams[i]);
+        cars = team->cars;
+        for (j = 0; j < team->racers; j++) {
+            if (cars[j].number == car_no) return 1;
+        }
+    }
+    return 0;
 }
 
 void add_car(char *team_name, int car, int speed, double consumption, int reliability) {
-    signal(SIGSEGV, print);
     char buff[BUFFSIZE];
     Team *team;
     if (!(team = find_team(team_name))) {
@@ -155,12 +162,18 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
         return;
     }
 
-    for (int i = 0; i < team->racers; i++) {
-        if (team->cars[i].number == car) {
-            snprintf(buff, sizeof(buff), "[Race Manager] Team %s already has car %d", team_name, car);
-            log_message(buff);
-            return;
-        }
+    // for (int i = 0; i < team->racers; i++) {
+    //     if (team->cars[i].number == car) {
+    //         snprintf(buff, sizeof(buff), "[Race Manager] Team %s already has car %d", team_name, car);
+    //         log_message(buff);
+    //         return;
+    //     }
+    // }
+
+    if (find_car(car)) {
+        snprintf(buff, sizeof(buff), "[Race Manager] Car %d already exists", car);
+        log_message(buff);
+        return;
     }
 
     if (team->racers == configs.maxCars) {
