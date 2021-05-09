@@ -45,9 +45,8 @@ extern int read_conf(char* filename);
 void terminate(int code);
 void wait_childs();
 
-void sigint() {
-  signal(SIGINT, SIG_IGN);
-  terminate(1);
+void sigint(int signo) {
+    if (signo == SIGINT) terminate(1);
 }
 
 void test_mq() {
@@ -57,15 +56,23 @@ void test_mq() {
 }
 
 int main(void) {
+    // FIXME SIGTSTP Is calling SIGINT?
     struct sigaction interrupt, statistics;
-    sigaddset(&block, SIGUSR1);
-    interrupt.sa_handler = sigint;
+    
     statistics.sa_handler = get_statistics;
+    statistics.sa_flags = SA_NODEFER;
     sigemptyset(&statistics.sa_mask);
-    statistics.sa_flags = 0;
-    sigemptyset(&interrupt.sa_mask);
+    sigaddset(&statistics.sa_mask, SIGINT);
+    
+    interrupt.sa_handler = sigint;
     interrupt.sa_flags = 0;
+    sigemptyset(&interrupt.sa_mask);
     sigaction(SIGINT, &interrupt, NULL);
+    
+    // Block SIGUSR1 and SIGTSTP
+    sigaddset(&block, SIGUSR1);
+    sigaddset(&block, SIGTSTP);
+    sigprocmask(SIG_BLOCK, &block, NULL);
 
     if (init_sem()) terminate(1);
     init_log();
@@ -75,20 +82,21 @@ int main(void) {
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
-
-
-    // Temp fix
-    signal(SIGINT, SIG_IGN);
+    
+    
+    sigaddset(&block, SIGINT);
+    sigprocmask(SIG_BLOCK, &block, NULL);
     init_proc(race_manager, NULL);
     init_proc(breakdown_manager, NULL);
-    // Temp fix
-    signal(SIGINT, sigint);
+
+    sigdelset(&block, SIGINT);
+    sigdelset(&block, SIGTSTP);
+    sigaction(SIGINT, &interrupt, NULL);
+    sigprocmask(SIG_SETMASK, &block, NULL);
     sigaction(SIGTSTP, &statistics, NULL);
-    sigprocmask(SIG_BLOCK, &block, NULL);
 
-    while(wait(NULL) != -1);
+    while (1) pause();
 
-    terminate(0);
     return 0;
 }
 
@@ -112,10 +120,9 @@ void wait_childs() {
 void terminate(int code) {
     while (wait(NULL) != -1);
     if (shm) {
-        for (int i = configs.noTeams+1; i >= 0; i--)
-            shmctl(shmids[i], IPC_RMID, NULL);
-        // if (shm->teams) free(shm->teams);
-        if (shmctl(shmid, IPC_RMID, NULL) == -1)
+        for (int i = configs.noTeams+1; i >= 1; i--)
+            if (shmctl(shmids[i], IPC_RMID, NULL)) perror("Failed to detroy shared mem segment");
+        if (shmctl(shmids[0], IPC_RMID, NULL) == -1)
             log_message("[Race Simulator] Shared memory couldn't be destroyed");
         else log_message("[Race Simulator] Shared memory destroyed");
         shm = NULL;
@@ -154,28 +161,28 @@ int init_sem() {
 
 int init_shm() {
     shmids = calloc(2+configs.noTeams, sizeof(int));
-    shmid = shmget(IPC_PRIVATE, sizeof(shm), IPC_CREAT|0700);
-    if (shmid == -1) {
+    shmids[0] = shmget(IPC_PRIVATE, sizeof(shm), IPC_CREAT|0700);
+    if (shmids[0] == 0) {
         log_message("[Race Simulator] Failed to get shared memory key");
         return -1;
     } log_message("[Race Simulator] Shared memory created");
 
-    if ((shm = shmat(shmid, NULL, 0)) == (void*) -1) {
+    if ((shm = shmat(shmids[0], NULL, 0)) == (void*) -1) {
         log_message("[Race Simulator] Failed to attach shared memory segment");
         return -1;
     } log_message("[Race Simulator] Shared memory segment attached");
     
-    shmids[0] = shmget(IPC_PRIVATE, configs.noTeams*sizeof(Team),IPC_CREAT|0700);
+    shmids[1] = shmget(IPC_PRIVATE, configs.noTeams*sizeof(Team),IPC_CREAT|0700);
     if (shmids[0] != -1) {
         log_message("[Race Simulator] Teams array created");
-        shm->teams = shmat(shmids[0], NULL, 0);
+        shm->teams = shmat(shmids[1], NULL, 0);
         if (shm->teams) log_message("[Race Simulator] Teams array attached");
 
         for (int i = 0; i < configs.noTeams; i++) {
             Team *team = &(shm->teams[i]);
             team->init = false;
-            shmids[i+1] = shmget(IPC_PRIVATE, configs.maxCars*sizeof(Car), IPC_CREAT|0700);
-            team->cars = shmat(shmids[i+1], NULL, 0);
+            shmids[i+2] = shmget(IPC_PRIVATE, configs.maxCars*sizeof(Car), IPC_CREAT|0700);
+            team->cars = shmat(shmids[i+2], NULL, 0);
             if (team->cars == NULL) log_message("Failed to allocate space for cars");
             else {
                 for (int j = 0; j < configs.maxCars; j++)
@@ -236,6 +243,13 @@ void log_message(char* message) {
 }
 
 void get_statistics() {
+    log_message("[Race Simulator] Statistics not yet implemented");
+    /*
     // TODO Implement statistics
-    // kill(0, SIGUSR1); // Sends SIGUSR1 to all processes and threads to suspend race
+    char buff[BUFFSIZE];
+    snprintf(buff, sizeof(buff), "Total Malfunctions: %d", shm->malfunctions);
+    log_message(buff);
+    snprintf(buff, sizeof(buff), "Total Fuel-Ups: %d", shm->topup);
+    log_message(buff);
+    */
 }

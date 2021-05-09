@@ -272,7 +272,7 @@ void pipe_listener() {
     char buff[BUFFSIZE];
     while (1) {
         FD_ZERO(&read_set);
-        puts("Zeroed out");
+        // puts("Zeroed out");
         FD_SET(fd_npipe, &read_set);
         for (i = 0; i < configs.noTeams; i++)
             FD_SET(upipes[i], &read_set);
@@ -308,15 +308,33 @@ void pipe_listener() {
     } // while(1)
 }
 
+void stop_statistics(int signo) {
+    if (signo == SIGUSR1) 
+        log_message("[Race Manager] Caught SIGUSR1, not yet implemented");
+}
+
 // Race Manager process lives here
 void race_manager() {
-    struct sigaction sigint;
+    pid_t mypid = getpid();
+    struct sigaction sigint, sigusr;
     sigint.sa_handler = manager_int;
     sigemptyset(&sigint.sa_mask);
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
 
-    log_message("[Race Manager] Process spawned");
+    sigusr.sa_handler = stop_statistics;
+    sigusr.sa_flags = SA_NODEFER;
+    sigemptyset(&sigusr.sa_mask);
+    sigaction(SIGUSR1, &sigusr, NULL);
+    
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGTSTP);
+    sigprocmask(SIG_SETMASK, &mask, NULL);
+
+    char buff[BUFFSIZE];
+    snprintf(buff, sizeof(buff), "[Race Manager] Process spawned (PID %d)", mypid);
+    log_message(buff);
     if (store_unnamed()) manager_term(1);
     if (open_npipe()) manager_term(1);
     shm->race_status = false;

@@ -115,9 +115,8 @@ void race(Car *me) {
 }
 
 // Car threads live here
-void* vroom(void* r_id) {
-    int id = *(int*)r_id;
-    free(r_id);
+void* vroom(void* t_id) {
+    int id = *((int*)t_id);
     char buff[64];
 
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d created", team->id, id);
@@ -132,7 +131,10 @@ void* vroom(void* r_id) {
     // If car has not been initialized: exit
     // Else race!
     if (me->number == -1) pthread_exit(0);
-    else race(me);
+    else {
+        pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+        race(me);
+    }
     
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
     log_message(buff);
@@ -171,13 +173,7 @@ void* car_box() {
 // Create a car thread if conditions match
 void spawn_car() {
     if (racers < configs.maxCars) {
-        int* id;
-        if (!(id = malloc(sizeof(int)))) {
-            log_message("malloc fail");
-            return;
-        }
-        *id = racers + 1;
-        pthread_create(&cars[racers], NULL, vroom, id);
+        pthread_create(&cars[racers], NULL, vroom, ids+racers);
         racers++;
     }
 }
@@ -270,8 +266,11 @@ void team_exit(int signo) {
 
 // Team Manager process lives here
 void team_execute() {
-    for (int i = 0; i < 1; i++)
+    ids = calloc(configs.maxCars, sizeof(int));
+    for (int i = 0; i < 2; i++) {
+        ids[i] = i;
         spawn_car();
+    }
     
     /*
     // TODO Habilitar todas as threads quando seguro
@@ -300,16 +299,13 @@ void team_init(int id, int pipe) {
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
 
-    if (pipe != -1) {
-        printf("Pipe open [%d]\n", pipe);
-        pipe_fd = pipe;
-    }
+    if (pipe != -1) pipe_fd = pipe;
     team = &(shm->teams[id-1]);
     team->id = id;
     team->box = FREE;
     race_mutex = &(shm->race_mutex);
     race_cv = &(shm->race_cv);
-    write(pipe_fd, "FUCK", strlen("FUCK")+1);
+    write(pipe_fd, "FUCK", strlen("FUCK")+1); // FIXME Delete this
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", team->id);
     log_message(buff);

@@ -22,7 +22,10 @@ extern void log_message();
 char buff[BUFFSIZE];
 
 void breakdown_int(int signum) {
-    if (signum == SIGINT) exit(0);
+    if (signum == SIGINT) {
+        log_message("[Breakdown Manager] Process exiting");
+        exit(0);
+    }
 } 
 
 void get_msg() {
@@ -60,10 +63,16 @@ void breakdown_manager() {
     sigaddset(&sigint.sa_mask, SIGTSTP);
     sigint.sa_flags = 0;
     sigaction(SIGINT, &sigint, NULL);
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGTSTP);
+    sigaddset(&mask, SIGUSR1);
+    sigprocmask(SIG_SETMASK, &mask, NULL);
     
     log_message("[Breakdown Manager] Process spawned");
     // Does its thing...
-    sleep(5);
+    while (1) pause(); // TODO Change this to the actual breakdown function
     log_message("[Breakdown Manager] Process exiting");
     exit(0);
 }
