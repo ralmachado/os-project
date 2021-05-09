@@ -75,7 +75,7 @@ int store_unnamed() {
 
 // Create Team Manager processes
 void spawn_teams() {
-    int fd[2];
+    int fd[2] = {-1, -1};
     for (int i = 0; i < configs.noTeams; i++) {
         if (pipe(fd)) {
             log_message("[Race Manager] Failed to open unnamed pipe");
@@ -162,14 +162,6 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
         return;
     }
 
-    // for (int i = 0; i < team->racers; i++) {
-    //     if (team->cars[i].number == car) {
-    //         snprintf(buff, sizeof(buff), "[Race Manager] Team %s already has car %d", team_name, car);
-    //         log_message(buff);
-    //         return;
-    //     }
-    // }
-
     if (find_car(car)) {
         snprintf(buff, sizeof(buff), "[Race Manager] Car %d already exists", car);
         log_message(buff);
@@ -203,15 +195,14 @@ void npipe_opts(char *opt) {
     char *saveptr;
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE") == 0) {
-        // TODO start race if not started yet, else complain!
+        log_message("[Race Manager] Received START RACE command");
         if (shm->race_status == false) {
             shm->race_status = true;
             pthread_cond_broadcast(&(shm->race_cv));
-        }
-        log_message("[Race Manager] Received START RACE command");
+            log_message("[Race Manager] Race started");
+        } else log_message("[Race Manager] Race has already started");
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
         log_message("[Race Manager] Received ADDCAR command");
-        // TODO if race already started reject
         if (shm->race_status == true) {
             log_message("[Race Manager] Cannot add car: race already started");
             return;
@@ -283,11 +274,11 @@ void pipe_listener() {
         FD_ZERO(&read_set);
         puts("Zeroed out");
         FD_SET(fd_npipe, &read_set);
-        // for (i = 0; i < configs.noTeams; i++)
-        //     FD_SET(upipes[i], &read_set);
+        for (i = 0; i < configs.noTeams; i++)
+            FD_SET(upipes[i], &read_set);
 
         // if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
-        if (select(fd_npipe+1, &read_set, NULL, NULL, NULL) > 0) {
+        if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
             if (FD_ISSET(fd_npipe, &read_set)) {
                 log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
                 do {
@@ -305,14 +296,12 @@ void pipe_listener() {
                 if (FD_ISSET(*(upipes+i), &read_set)) {
                     // TODO Get updates from Teams 
                     log_message("[Race Manager] Activity on unnamed pipe");
-                    do {
-                        nread = read(*(upipes+i), buff, sizeof(buff));
-                        if (nread > 0) {
-                            buff[nread-1] = 0;
-                            log_message(buff);
-                            // TODO Figure out what the updates do?
-                        }
-                    } while (nread > 0);
+                    nread = read(*(upipes+i), buff, sizeof(buff));
+                    if (nread > 0) {
+                        buff[nread-1] = 0;
+                        log_message(buff);
+                        // TODO Figure out what the updates do?
+                    }
                 }
             }
         } // if (select() > 0)
