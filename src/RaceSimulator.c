@@ -82,8 +82,7 @@ int main(void) {
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
-    
-    
+        
     sigaddset(&block, SIGINT);
     sigprocmask(SIG_BLOCK, &block, NULL);
     init_proc(race_manager, NULL);
@@ -186,7 +185,7 @@ int init_shm() {
             if (team->cars == NULL) log_message("Failed to allocate space for cars");
             else {
                 for (int j = 0; j < configs.maxCars; j++)
-                    team->cars[i].number = -1;
+                    team->cars[j].number = -1;
             }
         }
     }
@@ -197,7 +196,7 @@ int init_shm() {
 /* ----- Named Pipe ----- */
 
 void init_npipe() {
-    if (mkfifo(PIPE_NAME, O_CREAT|O_EXCL|0600)) {
+    if (mkfifo(PIPE_NAME, O_CREAT|O_EXCL|0700)) {
         log_message("[Race Simulator] Failed to create named pipe");
         terminate(1);
     }

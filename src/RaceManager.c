@@ -28,6 +28,7 @@ extern void init_proc();
 
 int fd_npipe = -1;
 int *upipes = NULL;
+int init_cars = 0;
 fd_set read_set;
 pthread_mutex_t *race_mutex;
 pthread_cond_t *race_cv;
@@ -41,18 +42,18 @@ void manager_term(int code) {
     }
     if (upipes) {
         for (int i = 0; i < configs.noTeams; i++) close(*(upipes+i));
-        free(upipes); 
+        free(upipes);
         log_message("[Race Manager] Closed unnamed pipes");
     }
 
     if (pthread_mutex_destroy(&(shm->race_mutex)))
         log_message("[Race Manager] Failed to destroy 'race_mutex'");
     else log_message("[Race Manager] Destroyed 'race_mutex'");
-    
+
     if (pthread_cond_destroy(race_cv))
         log_message("[Race Manager] Failed to destroy 'race_cv'");
     else log_message("[Race Manager] Destroyed 'race_cv'");
-    
+
     log_message("[Race Manager] Process exiting");
     exit(code);
 }
@@ -185,10 +186,11 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
     new_car->position = 0;
     new_car->stops = 0;
 
-    snprintf(buff, sizeof(buff), 
-        "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %.2f, Reliability: %d", 
+    snprintf(buff, sizeof(buff),
+        "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %.2f, Reliability: %d",
         team->name, new_car->number, new_car->speed, new_car->consumption, new_car->reliability);
     log_message(buff);
+    init_cars++;
 }
 
 void npipe_opts(char *opt) {
@@ -196,11 +198,15 @@ void npipe_opts(char *opt) {
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE") == 0) {
         log_message("[Race Manager] Received START RACE command");
-        if (shm->race_status == false) {
+        if (shm->race_status == false && init_cars > 0) {
             shm->race_status = true;
             pthread_cond_broadcast(&(shm->race_cv));
             log_message("[Race Manager] Race started");
-        } else log_message("[Race Manager] Race has already started");
+        } else if (shm->race_status == true) {
+            log_message("[Race Manager] Race has already started");
+        } else if (init_cars == 0) {
+            log_message("[Race Manager] Race can't start, no cars have been added");
+        }
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
         log_message("[Race Manager] Received ADDCAR command");
         if (shm->race_status == true) {
@@ -272,12 +278,11 @@ void pipe_listener() {
     char buff[BUFFSIZE];
     while (1) {
         FD_ZERO(&read_set);
-        // puts("Zeroed out");
         FD_SET(fd_npipe, &read_set);
         for (i = 0; i < configs.noTeams; i++)
             FD_SET(upipes[i], &read_set);
 
-        // if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
+        // Named pipe activity handling
         if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
             if (FD_ISSET(fd_npipe, &read_set)) {
                 log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
@@ -291,16 +296,16 @@ void pipe_listener() {
                 close(fd_npipe);
                 open(PIPE_NAME, O_RDWR);
             }
-            
+            // Unnamed pipe activity handling
             for (i = 0; i < configs.noTeams; i++) {
                 if (FD_ISSET(*(upipes+i), &read_set)) {
-                    // TODO Get updates from Teams 
-                    log_message("[Race Manager] Activity on unnamed pipe");
+                    // TODO Get updates from Teams
+                    snprintf(buff, sizeof(buff), "[Race Manager] Activity on unnamed pipe %d", i);
+                    log_message(buff);
                     nread = read(*(upipes+i), buff, sizeof(buff));
                     if (nread > 0) {
                         buff[nread-1] = 0;
                         log_message(buff);
-                        // TODO Figure out what the updates do?
                     }
                 }
             }
@@ -309,7 +314,7 @@ void pipe_listener() {
 }
 
 void stop_statistics(int signo) {
-    if (signo == SIGUSR1) 
+    if (signo == SIGUSR1)
         log_message("[Race Manager] Caught SIGUSR1, not yet implemented");
 }
 
@@ -326,7 +331,7 @@ void race_manager() {
     sigusr.sa_flags = SA_NODEFER;
     sigemptyset(&sigusr.sa_mask);
     sigaction(SIGUSR1, &sigusr, NULL);
-    
+
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGTSTP);
