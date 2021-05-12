@@ -117,6 +117,7 @@ void wait_childs() {
 
 // Cleanup shared memory segments and close opened streams before exiting
 void terminate(int code) {
+    shm->race_cancelled = true;
     while (wait(NULL) != -1);
     if (shm) {
         for (int i = configs.noTeams+1; i >= 1; i--)
