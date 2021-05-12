@@ -32,6 +32,7 @@ int init_cars = 0;
 fd_set read_set;
 pthread_mutex_t *race_mutex;
 pthread_cond_t *race_cv;
+sigset_t intmask;
 
 void manager_term(int code) {
     while (wait(NULL) != -1);
@@ -49,6 +50,10 @@ void manager_term(int code) {
     if (pthread_mutex_destroy(&(shm->race_mutex)))
         log_message("[Race Manager] Failed to destroy 'race_mutex'");
     else log_message("[Race Manager] Destroyed 'race_mutex'");
+
+    if (pthread_mutex_destroy(&(shm->close_mutex)))
+        log_message("[Race Manager] Failed to destroy 'close_mutex'");
+    else log_message("[Race Manager] Destroyed 'close_mutex'");
 
     if (pthread_cond_destroy(race_cv))
         log_message("[Race Manager] Failed to destroy 'race_cv'");
@@ -91,18 +96,6 @@ void spawn_teams() {
         close(fd[1]);
         *(upipes+i) = fd[0];
     }
-}
-
-void test_npipe() {
-    int nread;
-    char buff[512], msg[512 + 26];
-    do {
-        if ((nread = read(fd_npipe, &buff, sizeof(buff))) > 0) {
-            buff[nread - 1] = 0;
-            snprintf(msg, sizeof(msg), "[Race Manager] RECEIVED: %s", buff);
-            log_message(msg);
-        }
-    } while (strcmp(buff, "CLOSE") != 0);
 }
 
 int open_npipe() {
@@ -201,6 +194,7 @@ void npipe_opts(char *opt) {
         if (shm->race_status == false && init_cars > 0) {
             shm->race_status = true;
             pthread_cond_broadcast(&(shm->race_cv));
+            sigprocmask(SIG_BLOCK, &intmask, NULL);
             log_message("[Race Manager] Race started");
         } else if (shm->race_status == true) {
             log_message("[Race Manager] Race has already started");
@@ -213,14 +207,12 @@ void npipe_opts(char *opt) {
             log_message("[Race Manager] Cannot add car: race already started");
             return;
         }
-        // printf("opt = %s\n", opt);
         char *token = strtok_r(opt+7, " ", &saveptr);
         char team_name[BUFFSIZE];
         int car, speed, reliability;
         double consumption;
         if (token) {
             strncpy(team_name, token, sizeof(team_name));
-            // printf("token = %s\n", token);
         }  else {
             log_message("[Race Manager] Invalid car configuration received (missing args)");
             return;
@@ -230,7 +222,6 @@ void npipe_opts(char *opt) {
                 log_message("[Race Manager] Invalid car configuration received (car no.)");
                 return;
             }
-            // printf("token = %s | car = %d\n", token, car);
         } else {
             log_message("[Race Manager] Invalid car configuration received (missing args)");
             return;
@@ -240,7 +231,6 @@ void npipe_opts(char *opt) {
                 log_message("[Race Manager] Invalid car configuration received (speed)");
                 return;
             }
-            // printf("token = %s | speed = %d\n", token, speed);
         } else {
             log_message("[Race Manager] Invalid car configuration received (missing args)");
             return;
@@ -250,7 +240,6 @@ void npipe_opts(char *opt) {
                 log_message("[Race Manager] Invalid car configuration received (consumption)");
                 return;
             }
-            // printf("token = %s | consumption = %.2f\n", token, consumption);
         } else {
             log_message("[Race Manager] Invalid car configuration received (missing args)");
             return;
@@ -260,7 +249,6 @@ void npipe_opts(char *opt) {
                 log_message("[Race Manager] Invalid car configuration received (reliability)");
                 return;
             }
-            // printf("token = %s | reliability = %d\n", token, reliability);
         } else {
             log_message("[Race Manager] Invalid car configuration received (missing args)");
             return;
@@ -286,13 +274,11 @@ void pipe_listener() {
         if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
             if (FD_ISSET(fd_npipe, &read_set)) {
                 log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
-                do {
-                    nread = read(fd_npipe, buff, sizeof(buff));
-                    if (nread > 0) {
-                        buff[nread-1] = 0;
-                        npipe_opts(buff);
-                    }
-                } while (nread > 0);
+                nread = read(fd_npipe, buff, sizeof(buff));
+                if (nread > 0) {
+                    buff[nread-1] = 0;
+                    npipe_opts(buff);
+                }
                 close(fd_npipe);
                 open(PIPE_NAME, O_RDWR);
             }
@@ -305,7 +291,17 @@ void pipe_listener() {
                     nread = read(*(upipes+i), buff, sizeof(buff));
                     if (nread > 0) {
                         buff[nread-1] = 0;
-                        log_message(buff);
+                        if (strncmp(buff, "RACE FINISH", 11) == 0) {
+                            // TODO signal race end to all
+                            pthread_mutex_lock(race_mutex);
+                            shm->race_status = false;
+                            if (pthread_cond_broadcast(race_cv)) 
+                                log_message("[Race Manager] Failed to broadcast state change");
+                            else log_message("[Race Manager] Broadcasted state change");
+                            pthread_mutex_unlock(race_mutex);
+                            log_message("[Race Manager] Race finished");
+                            sigprocmask(SIG_UNBLOCK, &intmask, NULL);
+                        } else log_message(buff);
                     }
                 }
             }
@@ -337,6 +333,9 @@ void race_manager() {
     sigaddset(&mask, SIGTSTP);
     sigprocmask(SIG_SETMASK, &mask, NULL);
 
+    sigemptyset(&intmask);
+    sigaddset(&intmask, SIGINT);
+
     char buff[BUFFSIZE];
     snprintf(buff, sizeof(buff), "[Race Manager] Process spawned (PID %d)", mypid);
     log_message(buff);
@@ -360,8 +359,11 @@ void race_manager() {
         log_message("[Race Manager] Failed to initialize 'race_mutex'");
     else log_message("[Race Manager] Initialized 'race_mutex'");
 
+    if (pthread_mutex_init(&(shm->close_mutex), &shared_mutex))
+        log_message("[Race Manager] Failed to initialize 'close_mutex'");
+    else log_message("[Race Manager] Initialized 'close_mutex'");
+
     spawn_teams();
-    // test_pipes();
     pipe_listener();
     manager_term(0);
 }
