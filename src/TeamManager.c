@@ -217,17 +217,18 @@ void* car_box() {
         boxed->stops++;
 
         if (boxed->lowFuel) {
+            sleep(2*configs.timeUnit);
             boxed->fuel = configs.capacity; 
             boxed->lowFuel = false;
             shm->topup++;
         }
 
         if (boxed->malfunction) {
+            sleep(rand() % (configs.tBoxMax-configs.tBoxMin+1) + configs.tBoxMin);
             boxed->malfunction = false;
             shm->malfunctions++;
         }
 
-        sleep(rand() % (configs.tBoxMax + 1) + configs.tBoxMin);
         in_box = -1;
         pthread_cond_signal(&repair_cv);
     }
