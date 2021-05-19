@@ -31,6 +31,7 @@ typedef struct car_struct {
     int finalpos; // Final leaderboard pos
     double consumption; // Car consumption rate
     double fuel; // Car fuel tank
+    char *team;
 } Car;
 
 typedef struct team_struct {
@@ -53,8 +54,11 @@ typedef struct shared_struct {
     pthread_cond_t race_cv;
     pthread_mutex_t race_mutex, close_mutex;
     bool race_status;
-    bool race_cancelled; // Signal to end race early
+    bool race_int; // SIGINT received
+    bool race_usr1; // SIGUSR1 received
 } Sharedmem;
 
 Config configs;
 Sharedmem *shm;
+Car** stats_arr;
+int statsid;

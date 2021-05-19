@@ -3,13 +3,13 @@
 
 // Team Manager process functions
 
+#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <sys/msg.h>
 
 #include "libs/SharedMem.h"
@@ -28,6 +28,13 @@ Team *team;
 char magic[BUFFSIZE] = "RACE FINISH";
 
 extern void log_message();
+
+void notify_end() {
+    pthread_mutex_lock(race_mutex);
+    shm->race_status = false;
+    pthread_cond_broadcast(race_cv);
+    pthread_mutex_unlock(race_mutex);
+}
 
 // I have no idea if any of the code I am writing here will even work...
 void race(Car *me, int id) {
@@ -51,7 +58,7 @@ void race(Car *me, int id) {
             log_message(buff);
             me->state = QUIT;
             // TODO Update team and make car stop race
-            pthread_exit(NULL);
+            return;
         }
 
         if (me->state == RACE && (me->fuel) < 2*(me->consumption)*(configs.lapDistance)/(me->speed)) {
@@ -81,11 +88,12 @@ void race(Car *me, int id) {
                         snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->race_cancelled) {
+                        if (shm->race_int) {
                             if (--(shm->racing) == 0) write(pipe_fd, magic, sizeof(magic));
                         }
                     } else {
-                        me->state = FINISH;            
+                        me->state = FINISH;    
+                        me->finish = shm->pos++;        
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
                         write(pipe_fd, buff, sizeof(buff));
                         if (--(shm->racing) == 0) write(pipe_fd, magic, sizeof(buff));
@@ -130,7 +138,7 @@ void race(Car *me, int id) {
                         snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->race_cancelled) {
+                        if (shm->race_int) {
                             if (--(shm->racing) == 0) {
                                 write(pipe_fd, magic, sizeof(magic));
                             }
@@ -139,6 +147,7 @@ void race(Car *me, int id) {
                         }
                     } else {
                         me->state = FINISH;
+                        me->finish = shm->pos++;
                         shm->racing--;
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
                         write(pipe_fd, buff, sizeof(buff));
