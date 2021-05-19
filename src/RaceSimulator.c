@@ -82,6 +82,7 @@ int main(void) {
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
+
         
     sigaddset(&block, SIGINT);
     sigprocmask(SIG_BLOCK, &block, NULL);
@@ -117,8 +118,12 @@ void wait_childs() {
 
 // Cleanup shared memory segments and close opened streams before exiting
 void terminate(int code) {
-    shm->race_cancelled = true;
+    kill(0, SIGINT);
+    if (shm->race_status == RACE) shm->race_int = true;
     while (wait(NULL) != -1);
+
+    if (stats_arr) shmctl(statsid, IPC_RMID, NULL);
+
     if (shm) {
         for (int i = configs.noTeams+1; i >= 1; i--)
             if (shmctl(shmids[i], IPC_RMID, NULL)) perror("Failed to detroy shared mem segment");
@@ -191,6 +196,9 @@ int init_shm() {
         }
     }
 
+    statsid = shmget(IPC_PRIVATE, configs.noTeams*configs.maxCars*sizeof(Car*), IPC_CREAT|0700);
+    stats_arr = shmat(statsid, NULL, 0);
+
     return 0;
 }
 
@@ -242,14 +250,57 @@ void log_message(char* message) {
     sem_post(mutex);
 }
 
-void get_statistics() {
-    log_message("[Race Simulator] Statistics not yet implemented");
-    /*
-    // TODO Implement statistics
+// TODO think about adding a finish time to compare two finished cars
+int compare(const void* a, const void* b) {
+    Car* carA = (Car *) a;
+    Car* carB = (Car *) b;
+
+    if (carA->laps < carB->laps) return 1;
+    else if (carA->laps > carB->laps) return -1;
+    else {
+        if (carA->state == FINISH && carB->state == FINISH) return (carA->finish - carB->finish);
+        else if (carA->position < carB->position) return 1;
+        else if (carA->position > carB->position) return -1;
+        else return 0;
+    }
+}
+
+void leaderboard() {
     char buff[BUFFSIZE];
-    snprintf(buff, sizeof(buff), "Total Malfunctions: %d", shm->malfunctions);
+    int size = min(5, shm->init_cars);
+    Car* curr;
+    for (int i = 0; i < min; i++) {
+        curr = stats_arr[i];
+        if (curr->state != FINISH) {
+            snprintf(buff, sizeof(buff), "[Stats] #%d: Car %d | Team: %s | Laps completed: %d | Box stops: %d", 
+                i+1, curr->number, curr->team, curr->laps, curr->stops);
+        } else {
+            snprintf(buff, sizeof(buff), "[Stats] #%d: Car %d | Team: %s | Finished | Box stops: %d", 
+                i+1, curr->number, curr->team, curr->stops);
+        }
+        log_message(buff);
+    }
+
+    curr = stats_arr[shm->init_cars-1];
+    if (curr->state != FINISH) {
+        snprintf(buff, sizeof(buff), "[Stats] Last place: Car %d | Team: %s | Laps completed: %d | Box stops: %d",
+            curr->number, curr->team, curr->laps, curr->stops);
+    } else {
+        snprintf(buff, sizeof(buff), "[Stats] Last place: Car %d | Team: %s | Finished | Box stops: %d", 
+            curr->number, curr->team, curr->stops);
+    }
     log_message(buff);
-    snprintf(buff, sizeof(buff), "Total Fuel-Ups: %d", shm->topup);
+}
+
+void get_statistics() {
+    // TODO Implement statistics
+    qsort(stats_arr, shm->init_cars, sizeof(Car*), compare);
+    char buff[BUFFSIZE];
+    leaderboard();
+    snprintf(buff, sizeof(buff), "[Stats] Total Malfunctions: %d", shm->malfunctions);
     log_message(buff);
-    */
+    snprintf(buff, sizeof(buff), "[Stats] Total Fuel-Ups: %d", shm->topup);
+    log_message(buff);
+    snprintf(buff, sizeof(buff), "[Stats] Cars on track: %d", shm->on_track);
+    log_message(buff);
 }

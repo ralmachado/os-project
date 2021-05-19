@@ -28,7 +28,7 @@ extern void init_proc();
 
 int fd_npipe = -1;
 int *upipes = NULL;
-int init_cars = 0;
+int *init_cars = NULL;
 fd_set read_set;
 pthread_mutex_t *race_mutex;
 pthread_cond_t *race_cv;
@@ -178,6 +178,9 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
     new_car->malfunction = false;
     new_car->position = 0;
     new_car->stops = 0;
+    new_car->team = &(team->name);
+
+    stats_arr[*init_cars] = new_car; 
 
     snprintf(buff, sizeof(buff),
         "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %.2f, Reliability: %d",
@@ -191,14 +194,14 @@ void npipe_opts(char *opt) {
     char buff[BUFFSIZE];
     if (strcmp(opt, "START RACE") == 0) {
         log_message("[Race Manager] Received START RACE command");
-        if (shm->race_status == false && init_cars > 0) {
+        if (shm->race_status == false && *init_cars > 0) {
             shm->race_status = true;
             pthread_cond_broadcast(&(shm->race_cv));
             sigprocmask(SIG_BLOCK, &intmask, NULL);
             log_message("[Race Manager] Race started");
         } else if (shm->race_status == true) {
             log_message("[Race Manager] Race has already started");
-        } else if (init_cars == 0) {
+        } else if (*init_cars == 0) {
             log_message("[Race Manager] Race can't start, no cars have been added");
         }
     } else if (strncmp(opt, "ADDCAR", 6) == 0) {
@@ -310,8 +313,10 @@ void pipe_listener() {
 }
 
 void stop_statistics(int signo) {
-    if (signo == SIGUSR1)
-        log_message("[Race Manager] Caught SIGUSR1, not yet implemented");
+    if (signo == SIGUSR1) {
+        if (shm->race_status == RACE) shm->race_int = true;
+        // How the fuck do I do this? Because the Race Manager will stop listening to the 
+    }
 }
 
 // Race Manager process lives here
@@ -362,6 +367,8 @@ void race_manager() {
     if (pthread_mutex_init(&(shm->close_mutex), &shared_mutex))
         log_message("[Race Manager] Failed to initialize 'close_mutex'");
     else log_message("[Race Manager] Initialized 'close_mutex'");
+
+    init_cars = &(shm->init_cars);
 
     spawn_teams();
     pipe_listener();
