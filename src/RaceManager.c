@@ -30,8 +30,6 @@ int fd_npipe = -1;
 int *upipes = NULL;
 int *init_cars = NULL;
 fd_set read_set;
-pthread_mutex_t *race_mutex;
-pthread_cond_t *race_cv;
 sigset_t intmask;
 
 void manager_term(int code) {
@@ -155,7 +153,6 @@ void add_car(char *team_name, int car, int speed, double consumption, int reliab
 
     stats_arr[*init_cars] = new_car; 
 
-    puts("[DEBUG] Alive");
     snprintf(buff, sizeof(buff),
         "[Race Manager] New car => Team: %s, Car: %d, Speed: %d, Consumption: %.2f, Reliability: %d",
         team->name, new_car->number, new_car->speed, new_car->consumption, new_car->reliability);
@@ -244,10 +241,6 @@ void pipe_listener() {
     int i, nread;
     char buff[BUFFSIZE];
     while (1) {
-        if (shm->race_status == END || shm->race_usr1) {
-            // TODO Show statistics
-            shm->race_status = NS;
-        }
         FD_ZERO(&read_set);
         FD_SET(fd_npipe, &read_set);
         for (i = 0; i < configs.noTeams; i++)
@@ -256,7 +249,6 @@ void pipe_listener() {
         // Named pipe activity handling
         if (select(upipes[configs.noTeams-1]+1, &read_set, NULL, NULL, NULL) > 0) {
             if (FD_ISSET(fd_npipe, &read_set)) {
-                log_message("[Race Manager] Activity on named pipe"); // FIXME Delete so prof doesn't see this
                 nread = read(fd_npipe, buff, sizeof(buff));
                 if (nread > 0) {
                     buff[nread-1] = 0;
@@ -268,25 +260,20 @@ void pipe_listener() {
             // Unnamed pipe activity handling
             for (i = 0; i < configs.noTeams; i++) {
                 if (FD_ISSET(*(upipes+i), &read_set)) {
-                    // TODO Get updates from Teams
-                    snprintf(buff, sizeof(buff), "[Race Manager] Activity on unnamed pipe %d", i);
-                    log_message(buff);
                     nread = read(*(upipes+i), buff, sizeof(buff));
                     if (nread > 0) {
                         buff[nread-1] = 0;
-                        if (strncmp(buff, "RACE FINISH", 11) == 0) {
-                            // TODO signal race end to all
-                            // shm->race_status = END;
+                        if (strncmp(buff, "RACE FINISH", 11) == 0) {                           
                             if (shm->race_usr1 || shm->race_int) {
                                 get_statistics();
                                 shm->race_usr1 = false;
                                 shm->race_int = false;
                             }
-                            pthread_mutex_lock(race_mutex);
-                            if (pthread_cond_broadcast(race_cv)) 
+                            pthread_mutex_lock(&(shm->race_mutex));
+                            if (pthread_cond_broadcast(&(shm->race_cv))) 
                                 log_message("[Race Manager] Failed to broadcast state change");
                             else log_message("[Race Manager] Broadcasted state change");
-                            pthread_mutex_unlock(race_mutex);
+                            pthread_mutex_unlock(&(shm->race_mutex));
                             log_message("[Race Manager] Race finished");
                             sigprocmask(SIG_UNBLOCK, &intmask, NULL);
                         } else log_message(buff);
@@ -330,9 +317,7 @@ void race_manager() {
     log_message(buff);
     if (store_unnamed()) manager_term(1);
     if (open_npipe()) manager_term(1);
-    shm->race_status = false;
-    race_mutex = &(shm->race_mutex);
-    race_cv = &(shm->race_cv);
+    shm->race_status = NS;
     
     init_cars = &(shm->init_cars);
 

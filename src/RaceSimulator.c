@@ -123,19 +123,21 @@ void wait_childs() {
 
 // Cleanup shared memory segments and close opened streams before exiting
 void terminate(int code) {
+    shm->race_int = true;
     if (shm->race_status == ONGOING) {
-        shm->race_int = true;
         pthread_mutex_lock(&shm->race_mutex);
         while (shm->race_status == ONGOING)
             pthread_cond_wait(&shm->race_cv, &shm->race_mutex);
         pthread_mutex_unlock(&shm->race_mutex);
     }
+
+    pthread_cond_broadcast(&(shm->race_cv));
     kill(0, SIGINT);
     while (wait(NULL) != -1);
 
-    if (stats_arr) shmctl(statsid, IPC_RMID, NULL);
-    
     psync_destroy();
+    
+    if (stats_arr) shmctl(statsid, IPC_RMID, NULL);
 
     if (shm) {
         for (int i = configs.noTeams+1; i >= 1; i--)
@@ -238,13 +240,15 @@ void init_mq() {
     msglen = sizeof(msg)-sizeof(long);
 }
 
-/* ----- PThread Mutexes and Condition Variables ----- */
+/* ----- Pthread Mutexes and Condition Variables ----- */
+
 void init_psync() {
     pthread_condattr_init(&shared_cv);
     pthread_mutexattr_init(&shared_mutex);
     pthread_condattr_setpshared(&shared_cv, PTHREAD_PROCESS_SHARED);
     pthread_mutexattr_setpshared(&shared_mutex, PTHREAD_PROCESS_SHARED);
     pthread_mutexattr_setrobust(&shared_mutex, PTHREAD_MUTEX_ROBUST);
+
     if (pthread_cond_init(&shm->race_cv, &shared_cv))
         log_message("[Race Simulator] Failed to initialize 'race_cv'");
     else log_message("[Race Simulator] Initialized 'race_cv'");
@@ -260,19 +264,9 @@ void init_psync() {
     if (pthread_mutex_init(&shm->stats_mutex, &shared_mutex))
         log_message("[Race Simulator] Failed to initialize 'stats_mutex'");
     else log_message("[Race Simulator] Initialized 'stats_mutex'");
-
-    
 }
 
 void psync_destroy() {
-    if (pthread_cond_destroy(&shm->race_cv))
-        log_message("[Race Simulator] Failed to destroy 'race_cv'");
-    else log_message("[Race Simulator] Destroyed 'race_cv'");
-
-    if (pthread_cond_destroy(&shm->stats_cv))
-        log_message("[Race Simulator] Failed to destroy 'stats_cv'");
-    else log_message("[Race Simulator] Destroyed 'stats_cv'");
-
     if (pthread_mutex_destroy(&shm->race_mutex))
         log_message("[Race Simulator] Failed to destroy 'race_mutex'");
     else log_message("[Race Simulator] Destroyed 'race_mutex'");
@@ -280,6 +274,14 @@ void psync_destroy() {
     if (pthread_mutex_destroy(&shm->stats_mutex))
         log_message("[Race Simulator] Failed to destroy 'stats_mutex'");
     else log_message("[Race Simulator] Destroyed 'stats_mutex'");
+
+    if (pthread_cond_destroy(&shm->stats_cv))
+        log_message("[Race Simulator] Failed to destroy 'stats_cv'");
+    else log_message("[Race Simulator] Destroyed 'stats_cv'");
+
+    if (pthread_cond_destroy(&shm->race_cv))
+        log_message("[Race Simulator] Failed to destroy 'race_cv'");
+    else log_message("[Race Simulator] Destroyed 'race_cv'");
 
     if (pthread_condattr_destroy(&shared_cv))
         log_message("[Race Simulator] Failed to destroy 'shared_cv' condattr");
@@ -300,7 +302,6 @@ void init_log() {
 }
 
 void log_message(char* message) {
-    sem_wait(mutex);
     // Get current time
     char time_s[10];
     time_t time_1 = time(NULL);
@@ -308,12 +309,15 @@ void log_message(char* message) {
     strftime(time_s, sizeof(time_s), "%H:%M:%S ", time_2);
 
     // Print and write to log file
+    sem_wait(mutex);
     fprintf(log_file, "%s %s\n", time_s, message);
-    fflush(log_file);
     printf("%s %s\n", time_s, message);
+    fflush(log_file);
     fflush(stdout);
     sem_post(mutex);
 }
+
+/* ----- Race Statistics ----- */
 
 // TODO think about adding a finish time to compare two finished cars
 int compare(const void* a, const void* b) {
