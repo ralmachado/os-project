@@ -386,7 +386,6 @@ void team_init(int id, int pipe) {
     team->box = FREE;
     race_mutex = &(shm->race_mutex);
     race_cv = &(shm->race_cv);
-    // write(pipe_fd, "FUCK", strlen("FUCK")+1); // FIXME Delete this
     char buff[128];
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process spawned", team->id);
     log_message(buff);
