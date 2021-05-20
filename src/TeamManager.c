@@ -30,10 +30,8 @@ char magic[BUFFSIZE] = "RACE FINISH";
 extern void log_message();
 
 void notify_end() {
-    pthread_mutex_lock(race_mutex);
-    shm->race_status = false;
-    pthread_cond_broadcast(race_cv);
-    pthread_mutex_unlock(race_mutex);
+    write(pipe_fd, magic, sizeof(magic));
+    shm->race_status = END;
 }
 
 // I have no idea if any of the code I am writing here will even work...
@@ -41,8 +39,18 @@ void race(Car *me, int id) {
     // Receive breakdown messages
     char buff[BUFFSIZE];
     msg ohno;
-    while (true) {
-        size_t msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT); // TODO Find way to uniquely identify a car across all teams 
+    while (1) {
+        if (shm->show_stats) {
+            --(shm->racing);
+            // If last car to stop for stats, signal stat function to work
+            if (shm->racing == 0) pthread_cond_signal(&shm->stats_cv);
+            pthread_mutex_lock(&shm->stats_mutex);
+            // Wait for stat function end
+            while (shm->show_stats) pthread_cond_wait(&shm->stats_cv, &shm->stats_mutex);
+            ++(shm->racing);
+            pthread_mutex_unlock(&shm->stats_mutex);
+        }
+        size_t msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT);
         if (msgsize == msglen) {
             snprintf(buff, sizeof(buff), "[Car %d] Malfunctioning, entered safety mode", me->number);
             write(pipe_fd, buff, sizeof(buff));
@@ -88,17 +96,17 @@ void race(Car *me, int id) {
                         snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->race_int) {
-                            if (--(shm->racing) == 0) write(pipe_fd, magic, sizeof(magic));
+                        if (shm->race_int || shm->race_usr1) {
+                            if (--(shm->racing) == 0) notify_end();
+                            return;
                         }
                     } else {
                         me->state = FINISH;    
                         me->finish = shm->pos++;        
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (--(shm->racing) == 0) write(pipe_fd, magic, sizeof(buff));
-                        printf("%d\n", shm->racing);
-                        pthread_exit(0);
+                        if (--(shm->racing) == 0) notify_end();
+                        return;
                     }
                     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL); // IDEA Use this to stop race in the finishing line
                     if (me->lowFuel && team->box == FREE) { 
@@ -138,11 +146,8 @@ void race(Car *me, int id) {
                         snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->race_int) {
-                            if (--(shm->racing) == 0) {
-                                write(pipe_fd, magic, sizeof(magic));
-                            }
-                            printf("%d\n", shm->racing);
+                        if (shm->race_int || shm->race_usr1) {
+                            if (--(shm->racing) == 0) notify_end();
                             return;
                         }
                     } else {
@@ -151,8 +156,8 @@ void race(Car *me, int id) {
                         shm->racing--;
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->racing == 0) write(pipe_fd, magic, sizeof(magic));
-                        pthread_exit(0);
+                        if (shm->racing == 0) notify_end();
+                        return;
                     }
                     pthread_mutex_lock(&box_state);
                     if (team->box == RESERVED) {
@@ -197,15 +202,30 @@ void* vroom(void* t_id) {
     while (1) {
         // Wait for race start
         pthread_mutex_lock(race_mutex);
-        while (me->number == -1 || shm->race_status == false) 
+        while (me->number == -1 || shm->race_status != ONGOING) {
+            // log_message("[DEBUG] Waiting for race start");
             pthread_cond_wait(race_cv, race_mutex);
+        }
         pthread_mutex_unlock(race_mutex);
         
+        log_message("[DEBUG] Thread unlocked");
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        me->fuel = configs.capacity;
+        me->stops = 0;
+        me->laps = 0;
+        me->position = 0;
+        me->lowFuel = false;
+        me->malfunction = false;
+        me->state = RACE;
         shm->racing++;
         snprintf(buff, sizeof(buff), "[Car %d] Started racing", me->number);
         write(pipe_fd, buff, sizeof(buff));
         race(me, id);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+        pthread_mutex_lock(race_mutex);
+        while (shm->race_status == ONGOING)
+            pthread_cond_wait(race_cv, race_mutex);
+        pthread_mutex_unlock(race_mutex);
     }
     
     snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
@@ -254,7 +274,7 @@ void spawn_car() {
 // Await for all car threads to exit
 void join_threads() {
     pthread_mutex_lock(race_mutex);
-    while (shm->race_status == true)
+    while (shm->race_status == ONGOING)
         pthread_cond_wait(race_cv, race_mutex);
     pthread_mutex_unlock(race_mutex);
     char buff[64];
@@ -343,15 +363,8 @@ void team_exit(int signo) {
 // Team Manager process lives here
 void team_execute() {
     ids = calloc(configs.maxCars, sizeof(int));
-    /*
-    for (int i = 0; i < 2; i++) {
-        ids[i] = i;
-        spawn_car();
-    }
-    */
-    
-    // TODO Habilitar todas as threads quando seguro
-    // Criar maxCars threads -> descartar aquelas com car->number == -1 quando a corrida inicia
+        
+    // Criar maxCars threads -> Se carro não inicializado, thread idles
     for (int i = 0; i < configs.maxCars; i++) {
         ids[i] = i;
         spawn_car();
@@ -359,13 +372,8 @@ void team_execute() {
     
 
     pthread_create(&box_t, NULL, car_box, NULL);
-    sleep(2);
+    
     pause();
-
-    // team_destroy();
-    // snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Process exiting", team->id);
-    // log_message(buff);
-    // exit(0);
 }
 
 // Setup Team Manager

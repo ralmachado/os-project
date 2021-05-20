@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
@@ -32,14 +33,18 @@ int *shmids;
 FILE* log_file;
 sem_t* mutex;
 sigset_t block;
+pthread_condattr_t shared_cv;
+pthread_mutexattr_t shared_mutex;
 
 void get_statistics();
 void init_log();
 void init_mq();
 void init_npipe();
 void init_proc(void (*function)(), void* arg);
+void init_psync();
 int init_sem();
 int init_shm();
+void psync_destroy();
 void log_message(char* message);
 extern int read_conf(char* filename);
 void terminate(int code);
@@ -82,8 +87,8 @@ int main(void) {
     if (init_shm()) terminate(1);
     init_npipe();
     init_mq();
+    init_psync();
 
-        
     sigaddset(&block, SIGINT);
     sigprocmask(SIG_BLOCK, &block, NULL);
     init_proc(race_manager, NULL);
@@ -118,11 +123,19 @@ void wait_childs() {
 
 // Cleanup shared memory segments and close opened streams before exiting
 void terminate(int code) {
+    if (shm->race_status == ONGOING) {
+        shm->race_int = true;
+        pthread_mutex_lock(&shm->race_mutex);
+        while (shm->race_status == ONGOING)
+            pthread_cond_wait(&shm->race_cv, &shm->race_mutex);
+        pthread_mutex_unlock(&shm->race_mutex);
+    }
     kill(0, SIGINT);
-    if (shm->race_status == RACE) shm->race_int = true;
     while (wait(NULL) != -1);
 
     if (stats_arr) shmctl(statsid, IPC_RMID, NULL);
+    
+    psync_destroy();
 
     if (shm) {
         for (int i = configs.noTeams+1; i >= 1; i--)
@@ -225,6 +238,58 @@ void init_mq() {
     msglen = sizeof(msg)-sizeof(long);
 }
 
+/* ----- PThread Mutexes and Condition Variables ----- */
+void init_psync() {
+    pthread_condattr_init(&shared_cv);
+    pthread_mutexattr_init(&shared_mutex);
+    pthread_condattr_setpshared(&shared_cv, PTHREAD_PROCESS_SHARED);
+    pthread_mutexattr_setpshared(&shared_mutex, PTHREAD_PROCESS_SHARED);
+    pthread_mutexattr_setrobust(&shared_mutex, PTHREAD_MUTEX_ROBUST);
+    if (pthread_cond_init(&shm->race_cv, &shared_cv))
+        log_message("[Race Simulator] Failed to initialize 'race_cv'");
+    else log_message("[Race Simulator] Initialized 'race_cv'");
+
+    if (pthread_mutex_init(&shm->race_mutex, &shared_mutex))
+        log_message("[Race Simulator] Failed to initialize 'race_mutex'");
+    else log_message("[Race Simulator] Initialized 'race_mutex'");
+
+    if (pthread_cond_init(&shm->stats_cv, &shared_cv))
+        log_message("[Race Simulator] Failed to initialize 'stats_cv'");
+    else log_message("[Race Simulator] Initialized 'stats_cv'");
+
+    if (pthread_mutex_init(&shm->stats_mutex, &shared_mutex))
+        log_message("[Race Simulator] Failed to initialize 'stats_mutex'");
+    else log_message("[Race Simulator] Initialized 'stats_mutex'");
+
+    
+}
+
+void psync_destroy() {
+    if (pthread_cond_destroy(&shm->race_cv))
+        log_message("[Race Simulator] Failed to destroy 'race_cv'");
+    else log_message("[Race Simulator] Destroyed 'race_cv'");
+
+    if (pthread_cond_destroy(&shm->stats_cv))
+        log_message("[Race Simulator] Failed to destroy 'stats_cv'");
+    else log_message("[Race Simulator] Destroyed 'stats_cv'");
+
+    if (pthread_mutex_destroy(&shm->race_mutex))
+        log_message("[Race Simulator] Failed to destroy 'race_mutex'");
+    else log_message("[Race Simulator] Destroyed 'race_mutex'");
+
+    if (pthread_mutex_destroy(&shm->stats_mutex))
+        log_message("[Race Simulator] Failed to destroy 'stats_mutex'");
+    else log_message("[Race Simulator] Destroyed 'stats_mutex'");
+
+    if (pthread_condattr_destroy(&shared_cv))
+        log_message("[Race Simulator] Failed to destroy 'shared_cv' condattr");
+    else log_message("[Race Simulator] Destroyed 'shared_cv' condattr");
+
+    if (pthread_mutexattr_destroy(&shared_mutex))
+        log_message("[Race Simulator] Failed to destroy 'shared_mutex' mutexattr");
+    else log_message("[Race Simulator] Destroyed 'shared_mutex' mutexattr");
+}
+
 /* ----- Logging Functions -----*/
 
 void init_log() {
@@ -267,7 +332,9 @@ int compare(const void* a, const void* b) {
 
 void leaderboard() {
     char buff[BUFFSIZE];
-    int size = min(5, shm->init_cars);
+    int min;
+    if (shm->init_cars > 5) min = 5;
+    else min = shm->init_cars;
     Car* curr;
     for (int i = 0; i < min; i++) {
         curr = stats_arr[i];
@@ -294,6 +361,11 @@ void leaderboard() {
 
 void get_statistics() {
     // TODO Implement statistics
+    shm->show_stats = true;
+    pthread_mutex_lock(&shm->stats_mutex);
+    while (shm->racing != 0)
+        pthread_cond_wait(&shm->stats_cv, &shm->stats_mutex);
+    pthread_mutex_unlock(&shm->stats_mutex);
     qsort(stats_arr, shm->init_cars, sizeof(Car*), compare);
     char buff[BUFFSIZE];
     leaderboard();
@@ -303,4 +375,6 @@ void get_statistics() {
     log_message(buff);
     snprintf(buff, sizeof(buff), "[Stats] Cars on track: %d", shm->on_track);
     log_message(buff);
+    shm->show_stats = false;
+    pthread_cond_broadcast(&shm->stats_cv);
 }
