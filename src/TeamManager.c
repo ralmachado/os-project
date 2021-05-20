@@ -52,34 +52,31 @@ void race(Car *me, int id) {
         }
         size_t msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT);
         if (msgsize == msglen) {
-            snprintf(buff, sizeof(buff), "[Car %d] Malfunctioning, entered safety mode", me->number);
+            snprintf(buff, sizeof(buff), "[Car %d] Malfunctioning, entered safety mode\n", me->number);
             write(pipe_fd, buff, sizeof(buff));
-            // log_message(buff);
             me->state = SAFETY;
+            me->malfunction = true;
             pthread_mutex_lock(&box_state);
             if (team->box == FREE) team->box = RESERVED;
             pthread_mutex_unlock(&box_state);
         }
 
         if (me->fuel == 0 && !(me->state == QUIT)) {
-            snprintf(buff, sizeof(buff), "[Car %d] Ran out of fuel, quit from race", me->number);
+            snprintf(buff, sizeof(buff), "[Car %d] Ran out of fuel, quit from race\n", me->number);
             log_message(buff);
             me->state = QUIT;
-            // TODO Update team and make car stop race
             return;
         }
 
         if (me->state == RACE && (me->fuel) < 2*(me->consumption)*(configs.lapDistance)/(me->speed)) {
-            snprintf(buff, sizeof(buff), "[Car %d] Extremely low on fuel, entered safety mode", me->number);
+            snprintf(buff, sizeof(buff), "[Car %d] Extremely low on fuel, entered safety mode\n", me->number);
             write(pipe_fd, buff, sizeof(buff));
-            // log_message(buff);
             me->state = SAFETY; 
         }
         
         if (!(me->lowFuel) && me->state == RACE && (me->fuel) < 4*(me->consumption)*(configs.lapDistance)/(me->speed)) {
-            snprintf(buff, sizeof(buff), "[Car %d] Low on fuel, attempting to get box", me->number);
+            snprintf(buff, sizeof(buff), "[Car %d] Low on fuel, attempting to get box\n", me->number);
             write(pipe_fd, buff, sizeof(buff));
-            // log_message(buff);
             me->lowFuel = true;
         }
 
@@ -93,7 +90,7 @@ void race(Car *me, int id) {
                 if (me->position + me->speed >= configs.lapDistance) {
                     me->laps++;
                     if (me->laps < configs.lapCount) {
-                        snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
+                        snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d\n"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
                         if (shm->race_int || shm->race_usr1) {
@@ -103,7 +100,7 @@ void race(Car *me, int id) {
                     } else {
                         me->state = FINISH;    
                         me->finish = shm->pos++;        
-                        snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
+                        snprintf(buff, sizeof(buff), "[Car %d] Finished race\n", me->number);
                         write(pipe_fd, buff, sizeof(buff));
                         if (--(shm->racing) == 0) notify_end();
                         return;
@@ -112,7 +109,7 @@ void race(Car *me, int id) {
                     if (me->lowFuel && team->box == FREE) { 
                         pthread_mutex_lock(&box_state);
                         if (team->box == FREE) {
-                            snprintf(buff, sizeof(buff), "[Car %d] Entering the box", me->number);
+                            snprintf(buff, sizeof(buff), "[Car %d] Entering the box\n", me->number);
                             write(pipe_fd, buff, sizeof(buff)); 
                             me->position = 0;
                             me->state = BOX;
@@ -125,7 +122,7 @@ void race(Car *me, int id) {
                                 pthread_cond_wait(&repair_cv, &repair_mutex);
                             pthread_mutex_unlock(&repair_mutex);
                             me->state = RACE;
-                            snprintf(buff, sizeof(buff), "[Car %d] Left the box", me->number);
+                            snprintf(buff, sizeof(buff), "[Car %d] Left the box\n", me->number);
                             write(pipe_fd, buff, sizeof(buff)); 
                         }
                         pthread_mutex_unlock(&box_state);
@@ -134,8 +131,8 @@ void race(Car *me, int id) {
                 }
                 me->position += me->speed;
                 me->position %= configs.lapDistance;
-                snprintf(buff, sizeof(buff), "[Car %d] Position: %d | Lap: %d\n", me->number, me->position, me->laps);
-                write(pipe_fd, buff, sizeof(buff));
+                // snprintf(buff, sizeof(buff), "[Car %d] Position: %d | Lap: %d\n", me->number, me->position, me->laps);
+                // write(pipe_fd, buff, sizeof(buff));
                 break;
             case SAFETY:
                 me->fuel -= 0.4*(me->consumption);
@@ -143,7 +140,7 @@ void race(Car *me, int id) {
                 if (me->position + 0.3 * (me->speed) >= configs.lapDistance) {
                     me->laps++;
                     if (me->laps < configs.lapCount) {
-                        snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d"
+                        snprintf(buff, sizeof(buff), "[Car %d] Crossed the finish line, laps left: %d\n"
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
                         if (shm->race_int || shm->race_usr1) {
@@ -154,14 +151,14 @@ void race(Car *me, int id) {
                         me->state = FINISH;
                         me->finish = shm->pos++;
                         shm->racing--;
-                        snprintf(buff, sizeof(buff), "[Car %d] Finished race", me->number);
+                        snprintf(buff, sizeof(buff), "[Car %d] Finished race\n", me->number);
                         write(pipe_fd, buff, sizeof(buff));
                         if (shm->racing == 0) notify_end();
                         return;
                     }
                     pthread_mutex_lock(&box_state);
                     if (team->box == RESERVED) {
-                        snprintf(buff, sizeof(buff), "[Car %d] Entering the box", me->number);
+                        snprintf(buff, sizeof(buff), "[Car %d] Entering the box\n", me->number);
                         write(pipe_fd, buff, sizeof(buff)); 
                         me->position = 0;
                         me->state = BOX;
@@ -174,15 +171,15 @@ void race(Car *me, int id) {
                             pthread_cond_wait(&repair_cv, &repair_mutex);
                         pthread_mutex_unlock(&repair_mutex);
                         me->state = RACE;
-                        snprintf(buff, sizeof(buff), "[Car %d] left the box", me->number);
+                        snprintf(buff, sizeof(buff), "[Car %d] left the box\n", me->number);
                         write(pipe_fd, buff, sizeof(buff));
                     }
                     pthread_mutex_unlock(&box_state);
                 }
                 me->position += 0.3 * me->speed;
                 me->position %= configs.lapDistance;
-                snprintf(buff, sizeof(buff), "[Car %d] Position: %d | Lap: %d\n", me->number, me->position, me->laps);
-                write(pipe_fd, buff, sizeof(buff));
+                // snprintf(buff, sizeof(buff), "[Car %d] Position: %d | Lap: %d\n", me->number, me->position, me->laps);
+                // write(pipe_fd, buff, sizeof(buff));
                 break;
         }
 
@@ -202,13 +199,10 @@ void* vroom(void* t_id) {
     while (1) {
         // Wait for race start
         pthread_mutex_lock(race_mutex);
-        while (me->number == -1 || shm->race_status != ONGOING) {
-            // log_message("[DEBUG] Waiting for race start");
+        while (me->number == -1 || shm->race_status != ONGOING)
             pthread_cond_wait(race_cv, race_mutex);
-        }
         pthread_mutex_unlock(race_mutex);
         
-        log_message("[DEBUG] Thread unlocked");
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         me->fuel = configs.capacity;
         me->stops = 0;
@@ -228,10 +222,10 @@ void* vroom(void* t_id) {
         pthread_mutex_unlock(race_mutex);
     }
     
-    snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
-    log_message(buff);
+    // snprintf(buff, sizeof(buff) - 1, "[Team Manager #%d] Car thread #%d exiting", team->id, id);
+    // log_message(buff);
     
-    pthread_exit(0);
+    // pthread_exit(0);
 }
 
 void* car_box() {
@@ -244,6 +238,7 @@ void* car_box() {
         sem_wait(&box_worker);
         Car *boxed = &(team->cars[in_box]);
         boxed->stops++;
+        log_message(buff);
 
         if (boxed->lowFuel) {
             sleep(2*configs.timeUnit);
