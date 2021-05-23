@@ -12,8 +12,8 @@
 #include <pthread.h>
 #include <sys/msg.h>
 
-#include "libs/SharedMem.h"
-#include "libs/MsgQueue.h"
+#include "libs/header.h"
+#include "libs/message.h"
 
 pthread_t* cars, box_t;
 // TODO Consider using robust mutexes for box_state and repair_mutex
