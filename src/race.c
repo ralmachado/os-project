@@ -287,6 +287,7 @@ void pipe_listener() {
 void stop_statistics(int signo) {
     if (signo == SIGUSR1) {
         if (shm->race_status == ONGOING) shm->race_usr1 = true;
+        else log_message("[Race Manager] No race to interrupt");
     }
 }
 
