@@ -61,7 +61,6 @@ void test_mq() {
 }
 
 int main(void) {
-    // FIXME SIGTSTP Is calling SIGINT?
     struct sigaction interrupt, statistics;
     
     statistics.sa_handler = get_statistics;
@@ -319,7 +318,6 @@ void log_message(char* message) {
 
 /* ----- Race Statistics ----- */
 
-// TODO think about adding a finish time to compare two finished cars
 int compare(const void* a, const void* b) {
     Car* carA = (Car *) a;
     Car* carB = (Car *) b;
@@ -364,20 +362,19 @@ void leaderboard() {
 }
 
 void get_statistics() {
-    // TODO Implement statistics
     shm->show_stats = true;
     pthread_mutex_lock(&shm->stats_mutex);
-    while (shm->racing != 0)
+    while (shm->stats.racing != 0)
         pthread_cond_wait(&shm->stats_cv, &shm->stats_mutex);
     pthread_mutex_unlock(&shm->stats_mutex);
-    qsort(stats_arr, shm->init_cars, sizeof(Car*), compare);
     char buff[BUFFSIZE];
+    qsort(stats_arr, shm->init_cars, sizeof(Car*), compare);
     leaderboard();
-    snprintf(buff, sizeof(buff), "[Stats] Total Malfunctions: %d", shm->malfunctions);
+    snprintf(buff, sizeof(buff), "[Stats] Total Malfunctions: %d", shm->stats.malfunctions);
     log_message(buff);
-    snprintf(buff, sizeof(buff), "[Stats] Total Fuel-Ups: %d", shm->topup);
+    snprintf(buff, sizeof(buff), "[Stats] Total Fuel-Ups: %d", shm->stats.topup);
     log_message(buff);
-    snprintf(buff, sizeof(buff), "[Stats] Cars on track: %d", shm->on_track);
+    snprintf(buff, sizeof(buff), "[Stats] Cars on track: %d", shm->stats.on_track);
     log_message(buff);
     shm->show_stats = false;
     pthread_cond_broadcast(&shm->stats_cv);

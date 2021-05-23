@@ -30,7 +30,6 @@ void breakdown_int(int signum) {
 } 
 
 void create_break(){
-    // TODO Update when know how to id each car, yes?
     Car* car;
     msg breakdown;  
     char buff[BUFFSIZE];

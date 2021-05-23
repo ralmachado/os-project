@@ -43,20 +43,24 @@ typedef struct team_struct {
     Car *cars; // This is yet another shared memory
 } Team;
 
-typedef struct shared_struct {
+typedef struct stats_struct {
     int malfunctions;
     int topup;
-    int pos;
     int on_track;
     int racing;
+} Stats;
+
+typedef struct shared_struct {
+    int pos;
     int init_cars;
-    Team *teams; // This is another shared memory
-    pthread_cond_t race_cv, stats_cv;
-    pthread_mutex_t race_mutex, stats_mutex;
+    Stats stats;
     RaceState race_status;
     bool race_int; // SIGINT received
     bool race_usr1; // SIGUSR1 received
     bool show_stats; // Stop cars while showing stats
+    Team *teams; // This is another shared memory
+    pthread_cond_t race_cv, stats_cv;
+    pthread_mutex_t race_mutex, stats_mutex;
 } Sharedmem;
 
 Config configs;
