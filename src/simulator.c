@@ -20,11 +20,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "libs/BreakdownManager.h"
-#include "libs/MsgQueue.h"
-#include "libs/RaceManager.h"
-#include "libs/SharedMem.h"
-#include "libs/TeamManager.h"
+#include "libs/header.h"
+#include "libs/breakdown.h"
+#include "libs/message.h"
+#include "libs/race.h"
+#include "libs/team.h"
 
 #define DEBUG 0
 #define PIPE_NAME "manager"

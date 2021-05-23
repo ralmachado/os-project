@@ -13,8 +13,8 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "libs/SharedMem.h"
-#include "libs/MsgQueue.h"
+#include "libs/header.h"
+#include "libs/message.h"
 
 #define RAND 101
 

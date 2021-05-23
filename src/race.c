@@ -17,8 +17,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "libs/SharedMem.h"
-#include "libs/TeamManager.h"
+#include "libs/header.h"
+#include "libs/team.h"
 
 #define PIPE_NAME "manager"
 
