@@ -19,10 +19,10 @@ debug:
 
 ####################################
 
-src/RaceSimulator.o: ${SRC} 
+src/simulator.o: ${SRC} 
 
-src/RaceManager.o: src/race.c src/team.c
+src/race.o: src/race.c src/team.c
 
-src/TeamManager.o: src/team.c
+src/team.o: src/team.c
 
-src/BreakdownManager.o: src/breakdown.c
+objs/breakdown.o: src/breakdown.c
