@@ -41,13 +41,13 @@ void race(Car *me, int id) {
     msg ohno;
     while (1) {
         if (shm->show_stats) {
-            --(shm->racing);
+            --(shm->stats.racing);
             // If last car to stop for stats, signal stat function to work
-            if (shm->racing == 0) pthread_cond_signal(&shm->stats_cv);
+            if (shm->stats.racing == 0) pthread_cond_signal(&shm->stats_cv);
             pthread_mutex_lock(&shm->stats_mutex);
             // Wait for stat function end
             while (shm->show_stats) pthread_cond_wait(&shm->stats_cv, &shm->stats_mutex);
-            ++(shm->racing);
+            ++(shm->stats.racing);
             pthread_mutex_unlock(&shm->stats_mutex);
         }
         size_t msgsize = msgrcv(mqid, &ohno, msglen, me->number, IPC_NOWAIT);
@@ -94,7 +94,7 @@ void race(Car *me, int id) {
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
                         if (shm->race_int || shm->race_usr1) {
-                            if (--(shm->racing) == 0) notify_end();
+                            if (--(shm->stats.racing) == 0) notify_end();
                             return;
                         }
                     } else {
@@ -102,7 +102,7 @@ void race(Car *me, int id) {
                         me->finish = shm->pos++;        
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race\n", me->number);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (--(shm->racing) == 0) notify_end();
+                        if (--(shm->stats.racing) == 0) notify_end();
                         return;
                     }
                     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL); // IDEA Use this to stop race in the finishing line
@@ -144,16 +144,16 @@ void race(Car *me, int id) {
                                 , me->number, configs.lapCount - me->laps);
                         write(pipe_fd, buff, sizeof(buff));
                         if (shm->race_int || shm->race_usr1) {
-                            if (--(shm->racing) == 0) notify_end();
+                            if (--(shm->stats.racing) == 0) notify_end();
                             return;
                         }
                     } else {
                         me->state = FINISH;
                         me->finish = shm->pos++;
-                        shm->racing--;
+                        shm->stats.racing--;
                         snprintf(buff, sizeof(buff), "[Car %d] Finished race\n", me->number);
                         write(pipe_fd, buff, sizeof(buff));
-                        if (shm->racing == 0) notify_end();
+                        if (shm->stats.racing == 0) notify_end();
                         return;
                     }
                     pthread_mutex_lock(&box_state);
@@ -211,7 +211,7 @@ void* vroom(void* t_id) {
         me->lowFuel = false;
         me->malfunction = false;
         me->state = RACE;
-        shm->racing++;
+        shm->stats.racing++;
         snprintf(buff, sizeof(buff), "[Car %d] Started racing", me->number);
         write(pipe_fd, buff, sizeof(buff));
         race(me, id);
@@ -244,13 +244,13 @@ void* car_box() {
             sleep(2*configs.timeUnit);
             boxed->fuel = configs.capacity; 
             boxed->lowFuel = false;
-            shm->topup++;
+            shm->stats.topup++;
         }
 
         if (boxed->malfunction) {
             sleep(rand() % (configs.tBoxMax-configs.tBoxMin+1) + configs.tBoxMin);
             boxed->malfunction = false;
-            shm->malfunctions++;
+            shm->stats.malfunctions++;
         }
 
         in_box = -1;
