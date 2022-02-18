@@ -1,7 +1,7 @@
 CC = gcc
 FLAGS = -Wall -Wextra -pthread -g
-OBJS = src/RaceSimulator.o src/RaceManager.o src/TeamManager.o src/BreakdownManager.o src/Config.o
-SRC = src/RaceSimulator.c src/RaceManager.c src/TeamManager.c src/BreakdownManager.c src/Config.c
+OBJS = src/simulator.o src/race.o src/team.o src/breakdown.o src/config.o
+SRC = src/simulator.c src/race.c src/team.c src/breakdown.c src/config.c
 OUT = RaceSimulator
 
 ${OUT}: ${OBJS}
@@ -19,10 +19,10 @@ debug:
 
 ####################################
 
-src/RaceSimulator.o: ${SRC} 
+src/simulator.o: ${SRC} 
 
-src/RaceManager.o: src/RaceManager.c src/TeamManager.c
+src/race.o: src/race.c src/team.c
 
-src/TeamManager.o: src/TeamManager.c
+src/team.o: src/team.c
 
-src/BreakdownManager.o: src/BreakdownManager.c
+objs/breakdown.o: src/breakdown.c

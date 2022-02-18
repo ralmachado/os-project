@@ -1,9 +1,10 @@
 #define BUFFSIZE 256
 #define NAMESIZE 16
 
-typedef enum {false, true} bool;
-typedef enum {FREE, RESERVED, OCCUPPIED} Box;
-typedef enum {RACE, SAFETY, BOX, QUIT, FINISH} State;
+typedef enum boolean {false, true} bool;
+typedef enum box {FREE, RESERVED, OCCUPPIED} Box;
+typedef enum car_state {RACE, SAFETY, BOX, QUIT, FINISH} CarState;
+typedef enum race_state {NS, ONGOING, END} RaceState;
 
 typedef struct config_struct {
     int timeUnit;
@@ -18,7 +19,7 @@ typedef struct config_struct {
 } Config;
 
 typedef struct car_struct {
-    State state; // Car state
+    CarState state; // Car state
     bool lowFuel; // Has low fuel
     bool malfunction; // Is malfunctioning
     int number; // Car number
@@ -28,7 +29,6 @@ typedef struct car_struct {
     int laps; // Completed laps
     int stops; // Total pit stops
     int finish; // Leaderboard position once finished
-    int finalpos; // Final leaderboard pos
     double consumption; // Car consumption rate
     double fuel; // Car fuel tank
     char *team;
@@ -43,22 +43,29 @@ typedef struct team_struct {
     Car *cars; // This is yet another shared memory
 } Team;
 
-typedef struct shared_struct {
+typedef struct stats_struct {
     int malfunctions;
     int topup;
-    int pos;
     int on_track;
     int racing;
+} Stats;
+
+typedef struct shared_struct {
+    int pos;
     int init_cars;
-    Team *teams; // This is another shared memory
-    pthread_cond_t race_cv;
-    pthread_mutex_t race_mutex, close_mutex;
-    bool race_status;
+    Stats stats;
+    RaceState race_status;
     bool race_int; // SIGINT received
     bool race_usr1; // SIGUSR1 received
+    bool show_stats; // Stop cars while showing stats
+    Team *teams; // This is another shared memory
+    pthread_cond_t race_cv, stats_cv;
+    pthread_mutex_t race_mutex, stats_mutex;
 } Sharedmem;
 
 Config configs;
 Sharedmem *shm;
 Car** stats_arr;
 int statsid;
+
+void get_statistics();
